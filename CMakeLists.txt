@@ -12,15 +12,30 @@ endif()
 
 add_executable(${AppName}
     src/main.cpp
+
     src/app/AppRunner.cpp
+
     src/cli/ArgParser.cpp
+
+    src/config/ConfigColor.cpp
+    src/config/ConfigIgnore.cpp
+    src/config/ConfigIgnoreHelpers.cpp
+    src/config/ConfigParser.cpp
+    src/config/ConfigParserHelpers.cpp
+    src/config/ConfigPublic.cpp
+    src/config/ConfigState.cpp
+    src/config/ConfigWriter.cpp
+
     src/io/FileReader.cpp
     src/io/TargetWriter.cpp
+
     src/log/ConsolePrompt.cpp
     src/log/Logger.cpp
     src/log/PrintTree.cpp
+
     src/scan/DiscoveryScanner.cpp
     src/scan/IgnoreStore.cpp
+
     src/util/PathUtil.cpp
     src/util/StringUtil.cpp
     src/util/TextFilePolicy.cpp
