@@ -4,4 +4,4 @@ build/
 test.txt
 .cgtignore
 cgt-result.txt
-installer/
+**.exe
