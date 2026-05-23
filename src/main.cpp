@@ -1,0 +1,23 @@
+#include <windows.h>
+#include "app/AppRunner.h"
+#include "util/UnicodeConsole.h"
+
+int main()
+{
+    cgt::util::PrepareUnicodeConsole();
+
+    int argc = 0;
+    wchar_t** argv = CommandLineToArgvW(GetCommandLineW(), &argc);
+
+    if (!argv)
+    {
+        return -1;
+    }
+
+    cgt::app::AppRunner runner;
+    int result = runner.Run(argc, argv);
+
+    LocalFree(argv);
+
+    return result;
+}
