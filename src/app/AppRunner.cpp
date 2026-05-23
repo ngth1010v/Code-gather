@@ -20,6 +20,9 @@
 #include <cwctype>
 #include <iostream>
 #include <windows.h>
+#include <string>
+#include <cmath>
+#include <algorithm>
 
 namespace cgt::app
 {
@@ -64,8 +67,48 @@ namespace cgt::app
         return directs;
     }
 
-    static WORD ColorForExtension(const std::wstring& extension)
+    // Hàm kích hoạt ANSI Escape Codes cho Console (Chỉ cần gọi 1 lần duy nhất ở đầu hàm main)
+    void EnableVirtualTerminalProcessing()
     {
+        HANDLE hOut = GetStdHandle(STD_OUTPUT_HANDLE);
+        if (hOut == INVALID_HANDLE_VALUE) return;
+
+        DWORD dwMode = 0;
+        if (GetConsoleMode(hOut, &dwMode))
+        {
+            dwMode |= ENABLE_VIRTUAL_TERMINAL_PROCESSING;
+            SetConsoleMode(hOut, dwMode);
+        }
+    }
+
+    struct RGB { int r, g, b; };
+
+    // Hàm chuyển đổi HSL sang RGB (H: 0-360, S: 0.0-1.0, L: 0.0-1.0)
+    RGB HSLtoRGB(double h, double s, double l) 
+    {
+        double c = (1.0 - std::abs(2.0 * l - 1.0)) * s;
+        double x = c * (1.0 - std::abs(std::fmod(h / 60.0, 2.0) - 1.0));
+        double m = l - c / 2.0;
+
+        double r_prime = 0, g_prime = 0, b_prime = 0;
+
+        if (0 <= h && h < 60)       { r_prime = c; g_prime = x; b_prime = 0; }
+        else if (60 <= h && h < 120)  { r_prime = x; g_prime = c; b_prime = 0; }
+        else if (120 <= h && h < 180) { r_prime = 0; g_prime = c; b_prime = x; }
+        else if (180 <= h && h < 240) { r_prime = 0; g_prime = x; b_prime = c; }
+        else if (240 <= h && h < 300) { r_prime = x; g_prime = 0; b_prime = c; }
+        else if (300 <= h && h <= 360){ r_prime = c; g_prime = 0; b_prime = x; }
+
+        return {
+            static_cast<int>((r_prime + m) * 255),
+            static_cast<int>((g_prime + m) * 255),
+            static_cast<int>((b_prime + m) * 255)
+        };
+    }
+
+    static void PrintColoredPath(const std::wstring& text, const std::wstring& extension)
+    {
+        // 1. Tính hash từ extension (giữ nguyên gốc)
         const std::wstring key = cgt::util::ToLower(extension);
         std::size_t hash = 1469598103934665603ULL;
         for (wchar_t ch : key)
@@ -74,32 +117,24 @@ namespace cgt::app
             hash *= 1099511628211ULL;
         }
 
-        static const WORD palette[] = {
-            FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_INTENSITY,
-            FOREGROUND_RED | FOREGROUND_BLUE | FOREGROUND_INTENSITY,
-            FOREGROUND_GREEN | FOREGROUND_BLUE | FOREGROUND_INTENSITY,
-            FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE | FOREGROUND_INTENSITY,
-            FOREGROUND_RED | FOREGROUND_INTENSITY,
-            FOREGROUND_GREEN | FOREGROUND_INTENSITY,
-            FOREGROUND_BLUE | FOREGROUND_INTENSITY,
-            FOREGROUND_RED | FOREGROUND_BLUE | FOREGROUND_INTENSITY
-        };
+        // 2. Tính toán HSL động dựa trên hash
+        // Hue (Sắc độ): lấy từ 0 đến 359 độ
+        double h = static_cast<double>(hash % 360); 
+        
+        // Saturation (Độ bão hòa): cố định 0.85 (85%) để màu sắc tươi tắn, không bị xám
+        double s = 0.85; 
+        
+        // Lightness (Độ sáng): Map phần dư còn lại của hash vào dải 0.72 đến 0.85 (> 70%)
+        // Việc đổi nhẹ độ sáng giúp các phần mở rộng có Hue gần nhau vẫn phân biệt được
+        double l = 0.72 + (static_cast<double>(hash % 100) / 100.0) * 0.13;
 
-        return palette[hash % (sizeof(palette) / sizeof(palette[0]))];
-    }
+        // 3. Chuyển sang RGB
+        RGB color = HSLtoRGB(h, s, l);
 
-    static void PrintColoredPath(const std::wstring& text, const std::wstring& extension)
-    {
-        HANDLE handle = GetStdHandle(STD_OUTPUT_HANDLE);
-        CONSOLE_SCREEN_BUFFER_INFO info{};
-        WORD original = FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE;
-        if (GetConsoleScreenBufferInfo(handle, &info))
-        {
-            original = info.wAttributes;
-        }
-        SetConsoleTextAttribute(handle, ColorForExtension(extension));
-        std::wcout << text;
-        SetConsoleTextAttribute(handle, original);
+        // 4. In ra Console bằng mã ANSI TrueColor
+        std::wcout << L"\x1b[38;2;" << color.r << L";" << color.g << L";" << color.b << L"m" 
+                << text 
+                << L"\x1b[0m";
     }
 
     static void PrintFoundFilesBlock(const std::vector<scan::DiscoveredFile>& files,
@@ -277,6 +312,8 @@ namespace cgt::app
     int AppRunner::Run(int argc, wchar_t* argv[])
     {
         using namespace cgt;
+
+        EnableVirtualTerminalProcessing();
 
         const fs::path rootDir = GetCallerDir();
 
