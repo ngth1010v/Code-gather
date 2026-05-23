@@ -2,6 +2,6 @@
 bin/
 build/
 test.txt
-.cgtignore
+.cgtconfig
 cgt-result.txt
 **.exe

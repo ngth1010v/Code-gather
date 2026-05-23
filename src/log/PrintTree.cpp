@@ -3,6 +3,7 @@
 #include "log/Logger.h"
 #include "util/PathUtil.h"
 #include "util/StringUtil.h"
+#include "config/Config.h"
 
 #include <cmath>
 #include <filesystem>
@@ -17,12 +18,6 @@ namespace cgt::log
 
     namespace
     {
-        struct RGB
-        {
-            int r;
-            int g;
-            int b;
-        };
 
         struct TreeNode
         {
@@ -51,86 +46,6 @@ namespace cgt::log
                 dwMode |= ENABLE_VIRTUAL_TERMINAL_PROCESSING;
                 SetConsoleMode(hOut, dwMode);
             }
-        }
-
-        RGB HSLtoRGB(double h, double s, double l)
-        {
-            double c = (1.0 - std::abs(2.0 * l - 1.0)) * s;
-            double x = c * (1.0 - std::abs(std::fmod(h / 60.0, 2.0) - 1.0));
-            double m = l - c / 2.0;
-
-            double rPrime = 0;
-            double gPrime = 0;
-            double bPrime = 0;
-
-            if (0 <= h && h < 60)
-            {
-                rPrime = c;
-                gPrime = x;
-            }
-            else if (60 <= h && h < 120)
-            {
-                rPrime = x;
-                gPrime = c;
-            }
-            else if (120 <= h && h < 180)
-            {
-                gPrime = c;
-                bPrime = x;
-            }
-            else if (180 <= h && h < 240)
-            {
-                gPrime = x;
-                bPrime = c;
-            }
-            else if (240 <= h && h < 300)
-            {
-                rPrime = x;
-                bPrime = c;
-            }
-            else
-            {
-                rPrime = c;
-                bPrime = x;
-            }
-
-            return {
-                static_cast<int>((rPrime + m) * 255),
-                static_cast<int>((gPrime + m) * 255),
-                static_cast<int>((bPrime + m) * 255)
-            };
-        }
-
-        void PrintColoredPath(
-            const std::wstring& text,
-            const std::wstring& extension)
-        {
-            const std::wstring key =
-                cgt::util::ToLower(extension);
-
-            std::size_t hash = 1469598103934665603ULL;
-
-            for (wchar_t ch : key)
-            {
-                hash ^= static_cast<std::size_t>(ch);
-                hash *= 1099511628211ULL;
-            }
-
-            double h = static_cast<double>(hash % 360);
-            double s = 0.85;
-            double l =
-                0.72 +
-                (static_cast<double>(hash % 100) / 100.0) * 0.13;
-
-            RGB color = HSLtoRGB(h, s, l);
-
-            std::wcout
-                << L"\x1b[38;2;"
-                << color.r << L";"
-                << color.g << L";"
-                << color.b << L"m"
-                << text
-                << L"\x1b[0m";
         }
 
         TreeNode* FindChild(
@@ -204,10 +119,6 @@ namespace cgt::log
                 const std::wstring indexText =
                     std::to_wstring(node.fileIndex);
 
-                // std::wcout
-                //     << L"("
-                //     << indexText
-                //     << L") ";
                 std::wcout << indexText << L" ";
 
                 for (std::size_t i = 0;
@@ -221,9 +132,15 @@ namespace cgt::log
                     << prefix
                     << connector;
 
-                PrintColoredPath(
-                    node.name,
-                    fs::path(node.name).extension().wstring());
+                const auto color = cgt::config::GetExtColor(fs::path(node.name).extension().wstring());
+
+                std::wcout
+                    << L"\x1b[38;2;"
+                    << color.r << L";"
+                    << color.g << L";"
+                    << color.b << L"m"
+                    << node.name
+                    << L"\x1b[0m";
 
                 std::wcout << std::endl;
             }

@@ -8,10 +8,10 @@
 #include "log/Logger.h"
 #include "log/PrintTree.h"
 #include "scan/DiscoveryScanner.h"
-#include "scan/IgnoreStore.h"
 #include "util/PathUtil.h"
 #include "util/StringUtil.h"
 #include "util/TextFilePolicy.h"
+#include "config/Config.h"
 
 #include <algorithm>
 #include <filesystem>
@@ -128,7 +128,6 @@ namespace cgt::app
                                                      const std::vector<scan::DiscoveredFile>& discovered,
                                                      const std::vector<std::size_t>& selectionIds,
                                                      const std::vector<fs::path>& directPaths,
-                                                     const scan::IgnoreStore& ignoreStore,
                                                      bool& hadAnyReadAttempt)
     {
         std::vector<io::GatheredBlock> blocks;
@@ -142,12 +141,6 @@ namespace cgt::app
             const std::wstring key = cgt::util::NormalizeForCompare(path);
             if (used.contains(key))
             {
-                return;
-            }
-
-            if (ignoreStore.IsIgnored(path))
-            {
-                cgt::log::Logger::Warning(L"IgnoreStore", L"Ignored path: " + cgt::util::RelativeDisplayPath(root, path));
                 return;
             }
 
@@ -216,6 +209,9 @@ namespace cgt::app
 
         const fs::path rootDir = GetCallerDir();
 
+        cgt::config::Init(rootDir);
+        cgt::config::Parse();
+
         cli::ArgParser parser;
         const cli::ParsedArgs args = parser.Parse(argc, argv);
 
@@ -227,26 +223,22 @@ namespace cgt::app
             }
         }
 
-        const std::wstring targetToken = args.GetFirstConfigValue(L"target", L"cgt-result.txt");
-        const std::wstring filePrefix = args.GetFirstConfigValue(L"fileprefix", L"**");
+        // Update config
+        {
+            const fs::path outputPath(args.GetFirstConfigValue(L"output", L"cgt-result.txt"));
+            const std::wstring filePrefix  = args.GetFirstConfigValue(L"fileprefix", L"**");       
+            
+            config::SetOutputFilePath(outputPath);
+            config::SetFilePrefix(filePrefix);
+        }
+
+        const std::wstring outputToken = config::GetOutputFilePath().wstring();
+        const std::wstring filePrefix  = config::GetFilePrefix();
         const bool replace = args.HasFlag(L"replace");
-        const std::vector<std::wstring> ignoreTokens = args.GetConfigValues(L"ignore");
         const std::vector<std::wstring> filters = ExtractFilters(args.sourceArgs);
         const std::vector<std::wstring> directTokens = ExtractDirects(args.sourceArgs);
 
-        scan::IgnoreStore ignoreStore(rootDir);
-        if (!ignoreStore.Load())
-        {
-            log::Logger::Warning(L"IgnoreStore", L"Could not load .cgtignore. Continuing without stored ignore entries.");
-        }
-
-        ignoreStore.MergeCliEntries(ignoreTokens);
-        if (!ignoreStore.SaveIfNeeded())
-        {
-            log::Logger::Warning(L"IgnoreStore", L"Could not write .cgtignore.");
-        }
-
-        const fs::path targetPath = ResolveTarget(rootDir, targetToken);
+        const fs::path outputPath = ResolveTarget(rootDir, outputToken);
         std::vector<fs::path> directPaths;
         for (const auto& token : directTokens)
         {
@@ -259,7 +251,7 @@ namespace cgt::app
 
         if (!onlyDirectSources)
         {
-            scan::DiscoveryScanner scanner(rootDir, filters, ignoreStore.Entries());
+            scan::DiscoveryScanner scanner(rootDir, filters);
             discovered = scanner.Scan();
 
             if (args.sourceArgs.empty() && discovered.empty())
@@ -274,16 +266,6 @@ namespace cgt::app
             {
                 log::Logger::Warning(L"Discovery", L"No files matched the current filters or ignore rules.");
                 return 0;
-            }
-        }
-        else
-        {
-            for (const auto& p : directPaths)
-            {
-                if (ignoreStore.IsIgnored(p))
-                {
-                    log::Logger::Warning(L"IgnoreStore", L"Ignored direct path: " + cgt::util::RelativeDisplayPath(rootDir, p));
-                }
             }
         }
 
@@ -317,7 +299,7 @@ namespace cgt::app
         bool hadAnyReadAttempt = false;
         try
         {
-            blocks = BuildBlocks(rootDir, discovered, selectionIds, directPaths, ignoreStore, hadAnyReadAttempt);
+            blocks = BuildBlocks(rootDir, discovered, selectionIds, directPaths, hadAnyReadAttempt);
         }
         catch (...)
         {
@@ -335,9 +317,9 @@ namespace cgt::app
         std::wstring errorMessage;
         while (true)
         {
-            if (writer.Write(targetPath, filePrefix, replace, blocks, errorMessage))
+            if (writer.Write(outputPath, filePrefix, replace, blocks, errorMessage))
             {
-                log::Logger::Info(L"TargetWriter", L"Wrote output to " + cgt::util::RelativeDisplayPath(rootDir, targetPath));
+                log::Logger::Info(L"TargetWriter", L"Wrote output to " + cgt::util::RelativeDisplayPath(rootDir, outputPath));
                 return 0;
             }
 

@@ -34,7 +34,6 @@ add_executable(${AppName}
     src/log/PrintTree.cpp
 
     src/scan/DiscoveryScanner.cpp
-    src/scan/IgnoreStore.cpp
 
     src/util/PathUtil.cpp
     src/util/StringUtil.cpp

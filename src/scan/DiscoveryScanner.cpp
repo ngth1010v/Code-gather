@@ -4,6 +4,7 @@
 #include "util/TextFilePolicy.h"
 #include "util/StringUtil.h"
 #include "log/Logger.h"
+#include "config/Config.h"
 
 
 #include <algorithm>
@@ -20,66 +21,12 @@ namespace cgt::scan
     using cgt::util::NormalizeForCompare;
     using cgt::util::RelativeDisplayPath;
 
-    DiscoveryScanner::DiscoveryScanner(fs::path rootDir, std::vector<std::wstring> filters, std::vector<IgnoreEntry> ignoreEntries)
+    DiscoveryScanner::DiscoveryScanner(fs::path rootDir, std::vector<std::wstring> filters)
         : rootDir_(std::move(rootDir)),
-          filters_(std::move(filters)),
-          ignoreEntries_(std::move(ignoreEntries))
+          filters_(std::move(filters))
     {
     }
 
-    bool DiscoveryScanner::MatchesFolderIgnore(const std::wstring& candidateKey, const IgnoreEntry& entry) const
-    {
-        if (candidateKey == entry.key)
-        {
-            return true;
-        }
-
-        if (candidateKey.size() <= entry.key.size())
-        {
-            return false;
-        }
-
-        if (candidateKey.compare(0, entry.key.size(), entry.key) != 0)
-        {
-            return false;
-        }
-
-        return candidateKey[entry.key.size()] == L'/';
-    }
-
-    bool DiscoveryScanner::MatchesIgnore(const fs::path& candidate, bool directory) const
-    {
-        std::wstring candidateKey;
-        if (candidate.is_absolute() && IsPathInsideRoot(rootDir_, candidate))
-        {
-            candidateKey = RelativeDisplayPath(rootDir_, candidate);
-        }
-        else
-        {
-            candidateKey = NormalizeForCompare(candidate);
-        }
-
-        for (const auto& entry : ignoreEntries_)
-        {
-            if (entry.folder)
-            {
-                if (MatchesFolderIgnore(candidateKey, entry))
-                {
-                    return true;
-                }
-            }
-            else
-            {
-                const std::wstring fileKey = candidateKey;
-                if (fileKey == entry.key)
-                {
-                    return true;
-                }
-            }
-        }
-
-        return false;
-    }
 
     std::vector<DiscoveredFile> DiscoveryScanner::Scan() const
     {
@@ -103,7 +50,7 @@ namespace cgt::scan
 
             if (it->is_directory(ec))
             {
-                if (MatchesIgnore(current, true))
+                if (cgt::config::IsIgnored(current))
                 {
                     it.disable_recursion_pending();
                     continue;
@@ -116,17 +63,7 @@ namespace cgt::scan
                 continue;
             }
 
-            if (MatchesIgnore(current, false))
-            {
-                continue;
-            }
-
-            if (!cgt::util::IsTextCandidate(current))
-            {
-                continue;
-            }
-
-            if (!MatchesFilters(current, filters_))
+            if (cgt::config::IsIgnored(current))
             {
                 continue;
             }
