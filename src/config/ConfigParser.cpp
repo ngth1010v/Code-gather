@@ -5,7 +5,7 @@
 
 #include "config/Defaults.h"
 
-namespace ctg::config
+namespace cgt::config
 {
     int Parse()
     {

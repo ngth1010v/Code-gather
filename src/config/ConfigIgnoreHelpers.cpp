@@ -2,7 +2,7 @@
 
 #include "config/ConfigState.h"
 
-namespace ctg::config::detail
+namespace cgt::config::detail
 {
     std::vector<std::wstring> SplitSegments(const std::wstring& rel)
     {

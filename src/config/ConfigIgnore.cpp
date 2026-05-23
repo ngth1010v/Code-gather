@@ -3,7 +3,7 @@
 
 #include <vector>
 
-namespace ctg::config
+namespace cgt::config
 {
     bool IsIgnored(fs::path p)
     {

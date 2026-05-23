@@ -5,7 +5,7 @@
 
 namespace fs = std::filesystem;
 
-namespace ctg::config
+namespace cgt::config
 {
     struct RGB
     {

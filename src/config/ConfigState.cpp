@@ -8,7 +8,7 @@
 #include "config/Defaults.h"
 #include "log/Logger.h"
 
-namespace ctg::config::detail
+namespace cgt::config::detail
 {
     ConfigState& State()
     {
@@ -120,16 +120,16 @@ namespace ctg::config::detail
 
     void LogInfo(const std::wstring& msg)
     {
-        cgt::log::Logger::Info(L"ctg::config", msg);
+        cgt::log::Logger::Info(L"cgt::config", msg);
     }
 
     void LogWarn(const std::wstring& msg)
     {
-        cgt::log::Logger::Warning(L"ctg::config", msg);
+        cgt::log::Logger::Warning(L"cgt::config", msg);
     }
 
     void LogError(const std::wstring& msg)
     {
-        cgt::log::Logger::Error(L"ctg::config", msg);
+        cgt::log::Logger::Error(L"cgt::config", msg);
     }
 }

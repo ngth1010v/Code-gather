@@ -4,7 +4,7 @@
 
 #include "config/Config.h"
 
-namespace ctg::config::detail
+namespace cgt::config::detail
 {
     enum class Section
     {

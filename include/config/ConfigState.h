@@ -9,7 +9,7 @@
 
 namespace fs = std::filesystem;
 
-namespace ctg::config::detail
+namespace cgt::config::detail
 {
     struct ConfigState
     {

@@ -2,7 +2,7 @@
 
 #include "config/Defaults.h"
 
-namespace ctg::config
+namespace cgt::config
 {
     RGB GetExtColor(std::wstring ext)
     {

@@ -3,7 +3,7 @@
 #include <string>
 #include <vector>
 
-namespace ctg::config::detail
+namespace cgt::config::detail
 {
     std::vector<std::wstring> SplitSegments(const std::wstring& rel);
     bool MatchDirRule(const std::vector<std::wstring>& segs, const std::wstring& rule);

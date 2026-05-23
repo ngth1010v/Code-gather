@@ -4,7 +4,7 @@
 #include <string>
 #include <string_view>
 
-namespace ctg::config
+namespace cgt::config
 {
     inline constexpr std::wstring_view kConfigFileName = L".cgtconfig";
     inline constexpr std::wstring_view kDefaultOutputFileName = L"cgt-result.txt";

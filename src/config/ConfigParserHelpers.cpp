@@ -4,7 +4,7 @@
 
 #include "config/ConfigState.h"
 
-namespace ctg::config::detail
+namespace cgt::config::detail
 {
     RGB ParseRGBLine(const std::wstring& value, bool& ok)
     {
