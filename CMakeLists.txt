@@ -16,8 +16,9 @@ add_executable(${AppName}
     src/cli/ArgParser.cpp
     src/io/FileReader.cpp
     src/io/TargetWriter.cpp
-    src/log/Logger.cpp
     src/log/ConsolePrompt.cpp
+    src/log/Logger.cpp
+    src/log/PrintTree.cpp
     src/scan/DiscoveryScanner.cpp
     src/scan/IgnoreStore.cpp
     src/util/PathUtil.cpp
