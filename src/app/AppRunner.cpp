@@ -216,10 +216,6 @@ namespace cgt::app
 
         const fs::path rootDir = GetCallerDir();
 
-        // START-DEBUG
-        log::Logger::Info(L"AppRunner", rootDir.wstring());
-        // END-DEBUG
-
         cli::ArgParser parser;
         const cli::ParsedArgs args = parser.Parse(argc, argv);
 
