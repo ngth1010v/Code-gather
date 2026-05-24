@@ -71,24 +71,28 @@ cgt --filePrefix=##
 
 # 🖥️ Console Output
 
-Example:
+### Example:
 
 ```text
 Found files:
-(1) include/App.h
-(2) src/main.cpp
-(3) CMakeLists.txt
-(+) README.md
+  Code-gather/
+  ├── include/
+1 │   └── main.h
+  └── src/
+2     └── main.cpp
 ```
 
-- numbered entries = selectable discovered files
-- `(+)` = explicitly passed file path
+- Numbered entries = selectable discovered files
+- Each extension has a different color and can be adjusted in the .cgtconfig file.
 
-After selection:
+### How to select:
 
 ```text
-Select files:
-1,2,3
+1 2
+```
+or
+```text
+1,2
 ```
 
 ---
