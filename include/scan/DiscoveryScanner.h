@@ -17,12 +17,13 @@ namespace cgt::scan
     class DiscoveryScanner
     {
     public:
-        DiscoveryScanner(fs::path rootDir, std::vector<std::wstring> filters);
+        DiscoveryScanner(fs::path rootDir, std::vector<std::wstring> extFilters, std::vector<std::wstring> dirFilters);
 
         std::vector<DiscoveredFile> Scan() const;
 
     private:
         fs::path rootDir_;
-        std::vector<std::wstring> filters_;
+        std::vector<std::wstring> extFilters_;
+        std::vector<std::wstring> dirFilters_;
     };
 }

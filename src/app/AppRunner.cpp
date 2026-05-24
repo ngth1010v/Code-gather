@@ -23,7 +23,6 @@
 #include <windows.h>
 #include <string>
 #include <cmath>
-#include <algorithm>
 
 namespace cgt::app
 {
@@ -33,39 +32,8 @@ namespace cgt::app
     {
         wchar_t buffer[MAX_PATH * 4]{};
         DWORD len = GetCurrentDirectoryW(static_cast<DWORD>(sizeof(buffer) / sizeof(buffer[0])), buffer);
-        if (len == 0) return fs::current_path(); // Dự phòng nếu lỗi
+        if (len == 0) return fs::current_path(); 
         return fs::path(buffer, buffer + len);
-    }
-
-    static bool IsDirectPathToken(const std::wstring& token)
-    {
-        return !cgt::util::IsFilterToken(token);
-    }
-
-    static std::vector<std::wstring> ExtractFilters(const std::vector<std::wstring>& sourceArgs)
-    {
-        std::vector<std::wstring> filters;
-        for (const auto& token : sourceArgs)
-        {
-            if (cgt::util::IsFilterToken(token))
-            {
-                filters.push_back(cgt::util::ToLower(token));
-            }
-        }
-        return filters;
-    }
-
-    static std::vector<std::wstring> ExtractDirects(const std::vector<std::wstring>& sourceArgs)
-    {
-        std::vector<std::wstring> directs;
-        for (const auto& token : sourceArgs)
-        {
-            if (!cgt::util::IsFilterToken(token))
-            {
-                directs.push_back(token);
-            }
-        }
-        return directs;
     }
 
     static std::vector<std::size_t> ParseSelectionIds(const std::wstring& input,
@@ -235,23 +203,35 @@ namespace cgt::app
         const std::wstring outputToken = config::GetOutputFilePath().wstring();
         const std::wstring filePrefix  = config::GetFilePrefix();
         const bool replace = args.HasFlag(L"replace");
-        const std::vector<std::wstring> filters = ExtractFilters(args.sourceArgs);
-        const std::vector<std::wstring> directTokens = ExtractDirects(args.sourceArgs);
+
+        // Lấy danh sách ext filters và dir filters trực tiếp từ ParsedArgs mới
+        const std::vector<std::wstring> extFilters = args.GetExtFilters();
+        const std::vector<std::wstring> dirFilters = args.GetDirFilters();
 
         const fs::path outputPath = ResolveTarget(rootDir, outputToken);
+
+        // Phân loại directPaths: Nếu là đường dẫn file cụ thể (không phải là thư mục hợp lệ)
         std::vector<fs::path> directPaths;
-        for (const auto& token : directTokens)
+        for (const auto& token : dirFilters)
         {
             const fs::path resolved = cgt::util::ResolveFromRoot(rootDir, fs::path(token));
-            directPaths.push_back(resolved.lexically_normal());
+            fs::path normalPath = resolved.lexically_normal();
+            
+            // Nếu token trỏ trực tiếp đến 1 file cụ thể, đưa nó vào danh sách directPaths
+            if (fs::exists(normalPath) && !fs::is_directory(normalPath))
+            {
+                directPaths.push_back(normalPath);
+            }
         }
 
-        const bool onlyDirectSources = !directPaths.empty() && filters.empty();
+        // Nếu người dùng truyền đích danh file cụ thể trực tiếp mà không cấu hình luật quét ext/dir filter nào
+        const bool onlyDirectPaths = !directPaths.empty() && extFilters.empty() && (dirFilters.size() == directPaths.size());
         std::vector<scan::DiscoveredFile> discovered;
 
-        if (!onlyDirectSources)
+        if (!onlyDirectPaths)
         {
-            scan::DiscoveryScanner scanner(rootDir, filters);
+            // Sử dụng Scanner với 3 tham số mới: rootDir, extFilters, và dirFilters
+            scan::DiscoveryScanner scanner(rootDir, extFilters, dirFilters);
             discovered = scanner.Scan();
 
             if (args.sourceArgs.empty() && discovered.empty())
@@ -270,7 +250,7 @@ namespace cgt::app
         }
 
         std::vector<std::size_t> selectionIds;
-        if (!onlyDirectSources)
+        if (!onlyDirectPaths)
         {
             if (!discovered.empty())
             {

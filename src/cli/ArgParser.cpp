@@ -16,6 +16,7 @@ namespace cgt::cli
                 continue;
             }
 
+            // Xử lý các tham số dạng --key=value hoặc --flag
             if (token.rfind(L"--", 0) == 0)
             {
                 token = token.substr(2);
@@ -43,13 +44,28 @@ namespace cgt::cli
                 continue;
             }
 
-            if (!token.empty() && token[0] == L'-')
+            // Xử lý các flag hoặc token không hợp lệ bắt đầu bằng '-'
+            if (token[0] == L'-')
             {
                 parsed.unknownTokens.push_back(token);
                 continue;
             }
 
+            // [CLI-RULE THÊM MỚI]
+            // Lưu lại token gốc vào sourceArgs trước khi phân loại sâu hơn
             parsed.sourceArgs.push_back(token);
+
+            if (token[0] == L'.')
+            {
+                // Arg bắt đầu bằng "." -> đưa vào extFilters
+                parsed.extFilters.push_back(token);
+            }
+            else
+            {
+                // Arg không bắt đầu bằng "." hay "-" -> đưa vào dirFilters
+                // Xử lý loại bỏ dấu nháy (nếu có) phòng trường hợp đường dẫn chứa khoảng trắng
+                parsed.dirFilters.push_back(util::StripQuotes(token));
+            }
         }
 
         return parsed;

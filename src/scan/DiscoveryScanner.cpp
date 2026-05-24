@@ -6,27 +6,24 @@
 #include "log/Logger.h"
 #include "config/Config.h"
 
-
 #include <algorithm>
 #include <system_error>
 #include <unordered_set>
 #include <string>
-#include <iostream>
 
 namespace cgt::scan
 {
-    using cgt::util::ExtensionKey;
-    using cgt::util::IsPathInsideRoot;
     using cgt::util::MatchesFilters;
     using cgt::util::NormalizeForCompare;
     using cgt::util::RelativeDisplayPath;
+    using cgt::util::IsPathInsideRoot; // Đảm bảo hàm này có sẵn nếu cần check logic nâng cao
 
-    DiscoveryScanner::DiscoveryScanner(fs::path rootDir, std::vector<std::wstring> filters)
+    DiscoveryScanner::DiscoveryScanner(fs::path rootDir, std::vector<std::wstring> extFilters, std::vector<std::wstring> dirFilters)
         : rootDir_(std::move(rootDir)),
-          filters_(std::move(filters))
+          extFilters_(std::move(extFilters)),
+          dirFilters_(std::move(dirFilters))
     {
     }
-
 
     std::vector<DiscoveredFile> DiscoveryScanner::Scan() const
     {
@@ -53,36 +50,63 @@ namespace cgt::scan
                 if (cgt::config::IsIgnored(current))
                 {
                     it.disable_recursion_pending();
-                    continue;
                 }
                 continue;
             }
 
-            if (!it->is_regular_file(ec))
+            if (!it->is_regular_file(ec) || cgt::config::IsIgnored(current))
             {
                 continue;
             }
 
-            if (cgt::config::IsIgnored(current))
+            // 1. Lọc theo extFilters (nếu có danh sách lọc)
+            if (!extFilters_.empty() && !MatchesFilters(current, extFilters_))
             {
                 continue;
             }
 
-            // === VỊ TRÍ FIX BUG: Kiểm tra filter tại đây ===
-            if (!filters_.empty() && !MatchesFilters(current, filters_))
+            // Lấy relative path chuẩn của file để thực hiện kiểm tra dirFilters hoặc đóng gói kết quả
+            std::wstring relPathStr = RelativeDisplayPath(rootDir_, current.lexically_normal());
+
+            // 2. Lọc theo dirFilters (Nếu dirFilters.size() > 0 thì chỉ giữ lại file nằm trong các thư mục đó)
+            if (!dirFilters_.empty())
             {
-                continue;
+                bool insideTargetDir = false;
+                std::wstring lowerRelPath = cgt::util::ToLower(relPathStr);
+
+                for (const auto& dirFilter : dirFilters_)
+                {
+                    std::wstring lowerFilter = cgt::util::ToLower(dirFilter);
+                    
+                    // Chuẩn hóa ký tự phân tách của bộ lọc thư mục để tránh miss match
+                    std::replace(lowerFilter.begin(), lowerFilter.end(), L'\\', L'/');
+                    std::wstring normalizedRelPath = lowerRelPath;
+                    std::replace(normalizedRelPath.begin(), normalizedRelPath.end(), L'\\', L'/');
+
+                    if (!lowerFilter.empty() && lowerFilter.back() != L'/')
+                    {
+                        lowerFilter += L'/';
+                    }
+
+                    if (normalizedRelPath.rfind(lowerFilter, 0) == 0)
+                    {
+                        insideTargetDir = true;
+                        break;
+                    }
+                }
+
+                if (!insideTargetDir)
+                {
+                    continue;
+                }
             }
-            // ==============================================
 
             DiscoveredFile item;
             item.absolutePath = current.lexically_normal();
-            item.relativePath = RelativeDisplayPath(rootDir_, item.absolutePath);
+            item.relativePath = std::move(relPathStr);
             out.push_back(std::move(item));
         }
-        
 
-        // ĐÃ SỬA: Giữ nguyên tên file nguyên vẹn giúp cấu trúc cây thư mục chuẩn hóa hơn
         auto getPathComponents = [](const fs::path& p) {
             std::vector<std::wstring> comps;
             for (const auto& part : p) {
@@ -93,7 +117,6 @@ namespace cgt::scan
             return comps;
         };
 
-        // 1. Decorate: Tạo cấu trúc tạm để Cache kết quả path đã được parse & lower case
         struct SortItem {
             DiscoveredFile file;
             std::vector<std::wstring> lowerComps;
@@ -105,7 +128,6 @@ namespace cgt::scan
         for (auto& item : out) {
             SortItem si;
             si.file = std::move(item);
-            
             auto comps = getPathComponents(si.file.relativePath);
             si.lowerComps.reserve(comps.size());
             for (const auto& c : comps) {
@@ -114,38 +136,29 @@ namespace cgt::scan
             sortableOut.push_back(std::move(si));
         }
 
-        // 2. Sort dựa trên các component chuẩn
         std::sort(sortableOut.begin(), sortableOut.end(), [](const SortItem& a, const SortItem& b) {
             const auto& compsA = a.lowerComps;
             const auto& compsB = b.lowerComps;
-
             size_t minSize = std::min(compsA.size(), compsB.size());
             
             for (size_t i = 0; i < minSize; ++i) {
                 if (compsA[i] != compsB[i]) {
-                    // Xác định phần tử hiện tại có phải là file không (nếu là component cuối cùng của mảng)
                     bool isFileA = (i == compsA.size() - 1);
                     bool isFileB = (i == compsB.size() - 1);
-
-                    // Ưu tiên hiển thị thư mục lên trước file nếu cùng cấp
                     if (isFileA != isFileB) {
                         return isFileA < isFileB; 
                     }
-
                     return compsA[i] < compsB[i];
                 }
             }
-
             return compsA.size() < compsB.size();
         });
 
-        // 3. Undecorate: Trả dữ liệu về mảng ban đầu
         out.clear();
         for (auto& si : sortableOut) {
             out.push_back(std::move(si.file));
         }
 
-        // 4. Lọc trùng chính xác tuyệt đối nhờ mảng đã được sort chuẩn thứ tự alphabet tự nhiên
         out.erase(std::unique(out.begin(), out.end(), [](const DiscoveredFile& a, const DiscoveredFile& b)
         {
             return cgt::util::NormalizeForCompare(a.absolutePath) == cgt::util::NormalizeForCompare(b.absolutePath);
