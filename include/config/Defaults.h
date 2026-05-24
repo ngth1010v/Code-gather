@@ -35,4 +35,10 @@ namespace cgt::config
         {L"bat",       {180, 180, 180}},
         {L"c",         {200, 220, 255}}
     };
+
+    inline const std::vector<std::wstring> kDefaultIgnoreRules =
+    {
+        L".vscode/",
+        L".git/"
+    };
 }

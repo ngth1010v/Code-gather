@@ -20,7 +20,7 @@ namespace cgt::config::detail
     {
         auto& s = State();
         s.parsed = false;
-        s.ignoreRules.clear();
+        s.ignoreRules = kDefaultIgnoreRules;
         s.extColors = kDefaultExtColors;
         s.outputFilePath = s.workspaceDir / std::wstring(kDefaultOutputFileName);
         s.filePrefix = std::wstring(kDefaultFilePrefix);
