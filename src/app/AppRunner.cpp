@@ -193,11 +193,17 @@ namespace cgt::app
 
         // Update config
         {
-            const fs::path outputPath(args.GetFirstConfigValue(L"output", L"cgt-result.txt"));
-            const std::wstring filePrefix = args.GetFirstConfigValue(L"fileprefix", L"**");      
-            
-            config::SetOutputFilePath(outputPath);
-            config::SetFilePrefix(filePrefix);
+            const std::wstring outputToken = args.GetFirstConfigValue(L"output", L"");
+            const std::wstring filePrefix  = args.GetFirstConfigValue(L"fileprefix", L"");      
+
+            // Khác default
+            if (outputToken != L""){
+                fs::path outputPath(outputToken);
+                config::SetOutputFilePath(outputPath);
+            }
+            if (outputToken != L""){
+                config::SetFilePrefix(filePrefix);
+            }
         }
         
         const std::wstring outputToken = config::GetOutputFilePath().wstring();
