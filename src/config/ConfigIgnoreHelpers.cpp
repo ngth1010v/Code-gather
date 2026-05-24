@@ -1,114 +1,105 @@
 #include "config/ConfigIgnoreHelpers.h"
 
-#include "config/ConfigState.h"
+#include <algorithm>
 
 namespace cgt::config::detail
 {
-    std::vector<std::wstring> SplitSegments(const std::wstring& rel)
+    std::vector<std::wstring> ComponentSpliter(std::wstring path)
     {
+        std::replace(path.begin(), path.end(), L'\\', L'/');
+
         std::vector<std::wstring> out;
         std::wstring cur;
-        for (wchar_t ch : rel)
+
+        for (wchar_t ch : path)
         {
             if (ch == L'/')
             {
-                if (!cur.empty()) out.push_back(cur);
-                cur.clear();
+                if (!cur.empty())
+                {
+                    cur.push_back(L'/');
+                    out.push_back(std::move(cur));
+                    cur.clear();
+                }
+                continue;
             }
-            else
-            {
-                cur.push_back(ch);
-            }
+
+            cur.push_back(ch);
         }
-        if (!cur.empty()) out.push_back(cur);
+
+        if (!cur.empty())
+        {
+            out.push_back(std::move(cur));
+        }
+
         return out;
     }
 
-    bool MatchDirRule(const std::vector<std::wstring>& segs, const std::wstring& rule)
+    bool EndWith(const std::wstring& src, const std::wstring& sub)
     {
-        auto r = Trim(ToLower(rule));
-        if (r.empty()) return false;
+        if (sub.empty()) return true;
+        if (src.size() < sub.size()) return false;
+        return src.compare(src.size() - sub.size(), sub.size(), sub) == 0;
+    }
 
-        bool recursive = false;
-        bool rootOnly = false;
+    bool IgnoreMatcher(const std::vector<std::wstring>& srcComponents,
+                       const std::vector<std::wstring>& ruleComponents)
+    {
+        if (ruleComponents.empty()) return false;
+        if (srcComponents.empty()) return false;
 
-        if (!r.empty() && r.front() == L'/')
-        {
-            rootOnly = true;
-            r.erase(r.begin());
-        }
-        if (r.rfind(L"**/", 0) == 0)
-        {
-            recursive = true;
-            r = r.substr(3);
-        }
-        if (!r.empty() && r.back() == L'/') r.pop_back();
-        if (r.empty()) return false;
+        size_t sci = 0;
+        size_t rci = 0;
 
-        if (recursive)
+        while (sci < srcComponents.size() && rci < ruleComponents.size())
         {
-            for (const auto& seg : segs)
+            const std::wstring& rule = ruleComponents[rci];
+
+            // **xxx -> match any component that ends with xxx
+            if (rule.size() >= 2 && rule[0] == L'*' && rule[1] == L'*')
             {
-                if (seg == r) return true;
+                std::wstring ruleName = rule.substr(2);
+
+                while (sci < srcComponents.size() && !EndWith(srcComponents[sci], ruleName))
+                {
+                    ++sci;
+                }
+
+                if (sci >= srcComponents.size())
+                {
+                    return false;
+                }
+
+                ++sci;
+                ++rci;
+                continue;
             }
-            return false;
+
+            // *xxx -> match current component that ends with xxx
+            if (!rule.empty() && rule[0] == L'*')
+            {
+                std::wstring ruleName = rule.substr(1);
+
+                if (!EndWith(srcComponents[sci], ruleName))
+                {
+                    return false;
+                }
+
+                ++sci;
+                ++rci;
+                continue;
+            }
+
+            // exact match
+            if (srcComponents[sci] != rule)
+            {
+                return false;
+            }
+
+            ++sci;
+            ++rci;
         }
 
-        return rootOnly ? (!segs.empty() && segs.size() == 1 && segs.front() == r)
-                        : (!segs.empty() && segs.size() == 1 && segs.front() == r);
-    }
-
-    bool MatchFileRule(const std::vector<std::wstring>& segs, const std::wstring& rule)
-    {
-        auto r = Trim(ToLower(rule));
-        if (r.empty()) return false;
-
-        bool rootOnly = false;
-        bool recursive = false;
-
-        if (!r.empty() && r.front() == L'/')
-        {
-            rootOnly = true;
-            r.erase(r.begin());
-        }
-        if (r.rfind(L"**/", 0) == 0)
-        {
-            recursive = true;
-            r = r.substr(3);
-        }
-
-        const auto& name = segs.empty() ? std::wstring{} : segs.back();
-        const bool atRoot = segs.size() == 1;
-        auto extPos = name.find_last_of(L'.');
-        auto ext = extPos == std::wstring::npos ? std::wstring{} : name.substr(extPos + 1);
-
-        if (r.size() >= 2 && r[0] == L'*' && r[1] == L'.')
-        {
-            auto wantExt = r.substr(2);
-            return (recursive || atRoot || !rootOnly) && ext == wantExt && !name.empty();
-        }
-
-        if (r.rfind(L"**.", 0) == 0)
-        {
-            auto wantExt = r.substr(3);
-            return ext == wantExt && !name.empty();
-        }
-
-        if (rootOnly) return atRoot && name == r;
-        if (recursive) return name == r;
-        return name == r;
-    }
-
-    bool MatchRule(const std::wstring& rel, bool isDir, const std::wstring& rule)
-    {
-        auto segs = SplitSegments(rel);
-        if (segs.empty()) return false;
-
-        if (isDir || (!rule.empty() && rule.back() == L'/'))
-        {
-            return MatchDirRule(segs, rule);
-        }
-
-        return MatchFileRule(segs, rule);
+        return rci == ruleComponents.size();
     }
 }

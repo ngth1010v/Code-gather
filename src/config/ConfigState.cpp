@@ -5,6 +5,7 @@
 #include <locale>
 #include <random>
 
+#include "config/ConfigIgnoreHelpers.h"   // thêm
 #include "config/Defaults.h"
 #include "log/Logger.h"
 
@@ -21,6 +22,13 @@ namespace cgt::config::detail
         auto& s = State();
         s.parsed = false;
         s.ignoreRules = kDefaultIgnoreRules;
+        s.ruleComponentList.clear();
+
+        for (const auto& rule : s.ignoreRules)
+        {
+            s.ruleComponentList.push_back(ComponentSpliter(ToLower(rule)));
+        }
+
         s.extColors = kDefaultExtColors;
         s.outputFilePath = s.workspaceDir / std::wstring(kDefaultOutputFileName);
         s.filePrefix = std::wstring(kDefaultFilePrefix);

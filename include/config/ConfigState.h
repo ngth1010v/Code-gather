@@ -20,6 +20,7 @@ namespace cgt::config::detail
         fs::path outputFilePath;
         std::wstring filePrefix;
         std::vector<std::wstring> ignoreRules;
+        std::vector<std::vector<std::wstring>> ruleComponentList; // thêm dòng này
         std::map<std::wstring, RGB> extColors;
     };
 

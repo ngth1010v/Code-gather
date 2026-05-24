@@ -1,5 +1,6 @@
 #include "config/ConfigState.h"
 #include "config/ConfigParserHelpers.h"
+#include "config/ConfigIgnoreHelpers.h"   // thêm
 
 #include <fstream>
 
@@ -53,10 +54,24 @@ namespace cgt::config
                 continue;
             }
 
-            if (section == detail::Section::General) detail::HandleGeneralLine(line);
-            else if (section == detail::Section::Ignore) state.ignoreRules.push_back(line);
-            else if (section == detail::Section::Color) detail::HandleColorLine(line);
-            else detail::LogWarn(L"Line outside section ignored: " + line);
+            if (section == detail::Section::General)
+            {
+                detail::HandleGeneralLine(line);
+            }
+            else if (section == detail::Section::Ignore)
+            {
+                auto rule = detail::ToLower(line);
+                state.ignoreRules.push_back(rule);
+                state.ruleComponentList.push_back(detail::ComponentSpliter(rule));
+            }
+            else if (section == detail::Section::Color)
+            {
+                detail::HandleColorLine(line);
+            }
+            else
+            {
+                detail::LogWarn(L"Line outside section ignored: " + line);
+            }
         }
 
         state.parsed = true;

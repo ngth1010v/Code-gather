@@ -71,7 +71,7 @@ cgt --filePrefix=##
 
 # 🖥️ Console Output
 
-### Example:
+### Example
 
 ```text
 Found files:
@@ -83,14 +83,17 @@ Found files:
 ```
 
 - Numbered entries = selectable discovered files
-- Each extension has a different color and can be adjusted in the .cgtconfig file.
+- Each extension has its own color
+- Colors can be customized in `.cgtconfig`
 
-### How to select:
+### File Selection
 
 ```text
 1 2
 ```
+
 or
+
 ```text
 1,2
 ```
@@ -99,7 +102,7 @@ or
 
 # 📄 Result Output
 
-Generated output format:
+Generated output format with --filePrefix=**:
 
 ```text
 *CODE:
@@ -113,10 +116,11 @@ Generated output format:
 **END test2.cpp
 ```
 
-- output is plain text
+Properties:
+- plain text output
 - deterministic format
 - easy to parse later
-- preserves original source formatting
+- preserves original formatting
 
 ---
 
@@ -144,6 +148,10 @@ filePrefix=**
 [IGNORE]
 .vscode/
 .git/
+*.obj
+**build/
+include/*.gen.h
+src/**temp/
 
 [COLOR]
 bat=180,180,180
@@ -165,62 +173,188 @@ cgtconfig=255,180,255
 
 ## 🚫 Ignore Rules
 
-Ignore syntax follows Git-style patterns.
+Ignore rules are component-based path matchers.
 
-### Supported rules:
+Rules are split using `/` and matched component-by-component.
+
+Example:
 
 ```text
-file.txt
-/file.txt
-*.txt
-**.txt
-dir/
-**dir/
+include/data/file.txt
+-> ["include/", "data/", "file.txt"]
 ```
 
-### Default Ignore Rules
+Rule example:
 
 ```text
-.vscode/
-.git/
+include/*.txt
+-> ["include/", "*.txt"]
+```
+
+---
+
+## 🧩 Ignore Rule Syntax
+
+### Exact Component Match
+
+Matches an exact component.
+
+```text
+include/data/
+```
+
+Matches:
+
+```text
+include/data/
+```
+
+Does not match:
+
+```text
+src/include/data/
+```
+
+---
+
+### `*name`
+
+Matches a component in the current level if the component ends with `name`.
+
+```text
+*.txt
+```
+
+Matches:
+
+```text
+hello.txt
+test.txt
+```
+
+Does not match:
+
+```text
+dir/hello.txt
+```
+
+---
+
+### `**name`
+
+Matches any component recursively if the component ends with `name`.
+
+```text
+**.txt
+```
+
+Matches:
+
+```text
+a.txt
+dir/a.txt
+src/test/a.txt
+```
+
+---
+
+## 📁 Directory Rules
+
+Directory rules should end with `/`.
+
+### Ignore exact directory level
+
+```text
+build/
+```
+
+Matches:
+
+```text
+build/
+```
+
+Does not match:
+
+```text
+src/build/
+```
+
+---
+
+### Ignore directory recursively
+
+```text
+**build/
+```
+
+Matches:
+
+```text
+build/
+src/build/
+a/b/c/build/
 ```
 
 ---
 
 ## 🧪 Ignore Rule Examples
 
-### Ignore exact file
+### Ignore root `.git`
 
 ```text
-file.txt
+.git/
 ```
 
-### Ignore root file
+---
+
+### Ignore all `.obj` files recursively
 
 ```text
-/file.txt
+**.obj
 ```
 
-### Ignore extension in current level
+---
+
+### Ignore generated headers inside `include/`
 
 ```text
-*.txt
+include/*.gen.h
 ```
 
-### Ignore extension recursively
+Matches:
 
 ```text
-**.txt
+include/test.gen.h
 ```
 
-### Ignore directory
+Does not match:
 
 ```text
-dir/
+include/core/test.gen.h
 ```
 
-### Ignore directory recursively
+---
+
+### Ignore every `temp/` directory recursively
 
 ```text
-**dir/
+**temp/
+```
+
+Matches:
+
+```text
+temp/
+src/temp/
+a/b/temp/
+```
+
+---
+
+## 📌 Default Ignore Rules
+
+```text
+.vscode/
+.git/
 ```

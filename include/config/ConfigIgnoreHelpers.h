@@ -5,8 +5,8 @@
 
 namespace cgt::config::detail
 {
-    std::vector<std::wstring> SplitSegments(const std::wstring& rel);
-    bool MatchDirRule(const std::vector<std::wstring>& segs, const std::wstring& rule);
-    bool MatchFileRule(const std::vector<std::wstring>& segs, const std::wstring& rule);
-    bool MatchRule(const std::wstring& rel, bool isDir, const std::wstring& rule);
+    std::vector<std::wstring> ComponentSpliter(std::wstring path);
+    bool EndWith(const std::wstring& src, const std::wstring& sub);
+    bool IgnoreMatcher(const std::vector<std::wstring>& srcComponents,
+                       const std::vector<std::wstring>& ruleComponents);
 }

@@ -1,10 +1,45 @@
 #include "config/ConfigState.h"
 #include "config/ConfigIgnoreHelpers.h"
 
-#include <vector>
+#include <algorithm>
+#include <system_error>
 
 namespace cgt::config
 {
+    namespace
+    {
+        std::wstring NormalizeRelPath(const fs::path& p)
+        {
+            std::wstring rel = p.generic_wstring();
+            std::replace(rel.begin(), rel.end(), L'\\', L'/');
+            rel = detail::ToLower(rel);
+
+            while (!rel.empty() && rel.front() == L'/')
+            {
+                rel.erase(rel.begin());
+            }
+
+            return rel;
+        }
+
+        bool IsUnderWorkspace(const fs::path& abs, const fs::path& workspace)
+        {
+            std::error_code ec;
+            auto rel = fs::relative(abs, workspace, ec);
+            if (ec) return false;
+
+            const auto w = NormalizeRelPath(rel);
+            if (w.empty()) return false;
+
+            if (w == L".." || w.rfind(L"../", 0) == 0)
+            {
+                return false;
+            }
+
+            return true;
+        }
+    }
+
     bool IsIgnored(fs::path p)
     {
         auto& state = detail::State();
@@ -15,42 +50,44 @@ namespace cgt::config
         }
 
         std::error_code ec;
-        if (!fs::exists(p, ec))
+
+        fs::path abs = fs::absolute(p, ec);
+        if (ec)
+        {
+            abs = p;
+        }
+
+        if (!IsUnderWorkspace(abs, state.workspaceDir))
         {
             return false;
         }
 
-        const bool isDir = fs::is_directory(p, ec);
-        fs::path abs = fs::absolute(p, ec);
-        if (ec) abs = p;
+        const bool isDir = fs::is_directory(abs, ec);
 
-        fs::path rel = fs::relative(abs, state.workspaceDir, ec);
-        if (ec) rel = abs.filename();
-
-        std::vector<std::wstring> segs;
-        for (const auto& part : rel)
+        fs::path relPath = fs::relative(abs, state.workspaceDir, ec);
+        if (ec)
         {
-            auto s = detail::ToLower(part.generic_wstring());
-            if (!s.empty()) segs.push_back(s);
+            return false;
         }
-        if (segs.empty()) return false;
 
-        for (size_t i = 1; i <= segs.size(); ++i)
+        auto rel = NormalizeRelPath(relPath);
+        if (rel.empty())
         {
-            std::wstring cur;
-            for (size_t j = 0; j < i; ++j)
-            {
-                if (j) cur.push_back(L'/');
-                cur += segs[j];
-            }
+            return false;
+        }
 
-            const bool currentIsDir = (i < segs.size()) || isDir;
-            for (const auto& rule : state.ignoreRules)
+        if (isDir)
+        {
+            rel.push_back(L'/');
+        }
+
+        const auto srcComponents = detail::ComponentSpliter(rel);
+
+        for (const auto& ruleComponents : state.ruleComponentList)
+        {
+            if (detail::IgnoreMatcher(srcComponents, ruleComponents))
             {
-                if (detail::MatchRule(cur, currentIsDir, rule))
-                {
-                    return true;
-                }
+                return true;
             }
         }
 
