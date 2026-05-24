@@ -226,12 +226,12 @@ namespace cgt::app
         // Update config
         {
             const fs::path outputPath(args.GetFirstConfigValue(L"output", L"cgt-result.txt"));
-            const std::wstring filePrefix  = args.GetFirstConfigValue(L"fileprefix", L"**");       
+            const std::wstring filePrefix = args.GetFirstConfigValue(L"fileprefix", L"**");      
             
             config::SetOutputFilePath(outputPath);
             config::SetFilePrefix(filePrefix);
         }
-
+        
         const std::wstring outputToken = config::GetOutputFilePath().wstring();
         const std::wstring filePrefix  = config::GetFilePrefix();
         const bool replace = args.HasFlag(L"replace");
