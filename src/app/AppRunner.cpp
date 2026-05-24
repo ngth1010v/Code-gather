@@ -183,6 +183,12 @@ namespace cgt::app
         cli::ArgParser parser;
         const cli::ParsedArgs args = parser.Parse(argc, argv);
 
+        if (args.HasFlag(L"help"))
+        {
+            log::ConsolePrompt::PrintHelp();
+            return 0;
+        }
+
         if (!args.unknownTokens.empty())
         {
             for (const auto& token : args.unknownTokens)

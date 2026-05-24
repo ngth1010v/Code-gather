@@ -57,4 +57,20 @@ namespace cgt::log
             }
         }
     }
+
+    void ConsolePrompt::PrintHelp()
+    {
+        std::wcout << L"Usage:\n"
+                << L"  <app_name> --output=<file> --filePrefix=<prefix> .<ext> <dir>\n\n"
+                << L"Options:\n"
+                << L"  --help          Show this help message.\n"
+                << L"  --output        Path to the output .txt file.\n"
+                << L"  --filePrefix    Prefix text for section markers.\n"
+                << L"  .<ext>          Filter files by extension (e.g., .h .cpp).\n"
+                << L"  <dir>           Target directory to scan.\n\n"
+                << L"Output Format:\n"
+                << L"  <filePrefix>START <path>\n"
+                << L"  <...code...>\n"
+                << L"  <filePrefix>END <path>\n" << std::endl;
+    }
 }

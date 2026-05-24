@@ -23,5 +23,6 @@ namespace cgt::log
         static std::wstring AskSelection();
         static ReadFailureChoice AskReadFailure();
         static WriteFailureChoice AskWriteFailure();
+        static void PrintHelp();
     };
 }
