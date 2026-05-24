@@ -68,6 +68,13 @@ namespace cgt::scan
                 continue;
             }
 
+            // === VỊ TRÍ FIX BUG: Kiểm tra filter tại đây ===
+            if (!filters_.empty() && !MatchesFilters(current, filters_))
+            {
+                continue;
+            }
+            // ==============================================
+
             DiscoveredFile item;
             item.absolutePath = current.lexically_normal();
             item.relativePath = RelativeDisplayPath(rootDir_, item.absolutePath);
