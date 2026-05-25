@@ -37,6 +37,7 @@ namespace cgt::config
     std::wstring GetFilePrefix();
     int SetFilePrefix(std::wstring prefix);
 
+    bool HasTemplate(std::wstring templateName);
     int SetTemplate(std::wstring templateName, CgtTemplate tl);
     int RemoveTemplate(std::wstring templateName);
     CgtTemplate GetTemplate(std::wstring templateName);

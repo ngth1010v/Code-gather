@@ -84,6 +84,11 @@ namespace cgt::config
         return Write();
     }
 
+    bool HasTemplate(std::wstring templateName) {
+        auto& state = detail::State();
+        return state.templates.contains(templateName);
+    }
+
     int SetTemplate(std::wstring templateName, CgtTemplate tl)
     {
         auto& state = detail::State();

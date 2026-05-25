@@ -168,6 +168,12 @@ namespace cgt::app
         return cgt::util::ResolveFromRoot(root, input);
     }
 
+    static bool IsReservedTemplateFlag(const std::wstring& flag)
+    {
+        return flag == L"help"
+            || flag == L"replace";
+    }
+
     int AppRunner::Run(int argc, wchar_t* argv[])
     {
         using namespace cgt;
@@ -194,30 +200,111 @@ namespace cgt::app
             }
         }
 
+        // Runtime state:
+        // - template chỉ ảnh hưởng vào runtime
+        // - output/filePrefix từ CLI config mới được ghi vào config
+        std::wstring runtimeOutputToken = config::GetOutputFilePath().wstring();
+        std::wstring runtimeFilePrefix = config::GetFilePrefix();
+        std::vector<std::wstring> runtimeExtFilters;
+        std::vector<std::wstring> runtimeDirFilters;
+
+        // 1) Apply template theo đúng thứ tự xuất hiện trên CLI
+        for (const auto& flag : args.GetOrderedFlags())
+        {
+            if (IsReservedTemplateFlag(flag))
+            {
+                continue;
+            }
+
+            if (!config::HasTemplate(flag))
+            {
+                log::Logger::Warning(L"Template", L"Template not found, skipped: " + flag);
+                continue;
+            }
+
+            const config::CgtTemplate tl = config::GetTemplate(flag);
+
+            runtimeOutputToken = tl.output;
+            runtimeFilePrefix = tl.filePrefix;
+            runtimeExtFilters = tl.extFilters;
+            runtimeDirFilters = tl.dirFilters;
+        }
+
+        // 2) Apply CLI config, output/filePrefix được lưu vào config
         {
             const std::wstring outputToken = args.GetFirstConfigValue(L"output", L"");
             const std::wstring filePrefix  = args.GetFirstConfigValue(L"fileprefix", L"");
 
             if (!outputToken.empty())
             {
+                runtimeOutputToken = outputToken;
                 fs::path outputPath(outputToken);
                 config::SetOutputFilePath(outputPath);
             }
 
             if (!filePrefix.empty())
             {
+                runtimeFilePrefix = filePrefix;
                 config::SetFilePrefix(filePrefix);
             }
         }
 
-        const std::wstring outputToken = config::GetOutputFilePath().wstring();
-        const std::wstring filePrefix  = config::GetFilePrefix();
+        // 3) CLI filters overwrite template filters nếu có
+        if (!args.GetExtFilters().empty())
+        {
+            runtimeExtFilters = args.GetExtFilters();
+        }
+        if (!args.GetDirFilters().empty())
+        {
+            runtimeDirFilters = args.GetDirFilters();
+        }
+
+        // 4) SetTemplate: lưu sau khi đã apply template + CLI config/filter
+        {
+            const std::vector<std::wstring> setTemplateNames = args.GetConfigValues(L"settemplate");
+            if (!setTemplateNames.empty())
+            {
+                config::CgtTemplate tl;
+                tl.output = runtimeOutputToken;
+                tl.filePrefix = runtimeFilePrefix;
+                tl.extFilters = runtimeExtFilters;
+                tl.dirFilters = runtimeDirFilters;
+
+                for (const auto& name : setTemplateNames)
+                {
+                    if (name.empty())
+                    {
+                        continue;
+                    }
+                    config::SetTemplate(name, tl);
+                }
+            }
+        }
+
+        // 5) RemoveTemplate: xóa sau cùng
+        {
+            const std::vector<std::wstring> removeTemplateNames = args.GetConfigValues(L"rmtemplate");
+            for (const auto& name : removeTemplateNames)
+            {
+                if (name.empty())
+                {
+                    continue;
+                }
+                config::RemoveTemplate(name);
+            }
+        }
+
+        // 6) Write config
+        {
+            config::Write();
+        }        
+
         const bool replace = args.HasFlag(L"replace");
 
-        const std::vector<std::wstring> extFilters = args.GetExtFilters();
-        const std::vector<std::wstring> dirFilters = args.GetDirFilters();
-
-        const fs::path outputPath = ResolveTarget(rootDir, outputToken);
+        const fs::path outputPath = ResolveTarget(rootDir, runtimeOutputToken);
+        const std::wstring filePrefix = runtimeFilePrefix;
+        const std::vector<std::wstring> extFilters = runtimeExtFilters;
+        const std::vector<std::wstring> dirFilters = runtimeDirFilters;
 
         std::vector<fs::path> directPaths;
         for (const auto& token : dirFilters)
@@ -297,6 +384,8 @@ namespace cgt::app
             log::Logger::Warning(L"Gather", L"No file matched the current filters / ignores / source constraints.");
             return 0;
         }
+
+
 
         io::TargetWriter writer;
         std::wstring errorMessage;

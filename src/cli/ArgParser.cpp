@@ -24,7 +24,12 @@ namespace cgt::cli
 
                 if (eq == std::wstring::npos)
                 {
-                    parsed.flags.insert(util::ToLower(token));
+                    std::wstring flag = util::ToLower(util::Trim(token));
+                    if (!flag.empty())
+                    {
+                        parsed.flags.insert(flag);
+                        parsed.orderedFlags.push_back(flag);
+                    }
                     continue;
                 }
 
@@ -51,7 +56,6 @@ namespace cgt::cli
                 continue;
             }
 
-            // [CLI-RULE THÊM MỚI]
             // Lưu lại token gốc vào sourceArgs trước khi phân loại sâu hơn
             parsed.sourceArgs.push_back(token);
 
