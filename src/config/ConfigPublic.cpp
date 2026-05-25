@@ -89,6 +89,17 @@ namespace cgt::config
         return state.templates.contains(templateName);
     }
 
+    std::vector<std::wstring> GetTemplateNames() {
+
+        auto& state = detail::State();
+        std::vector<std::wstring> names;
+        for (auto const& pair : state.templates) {
+            names.push_back(pair.first);
+        }
+
+        return names;
+    }
+
     int SetTemplate(std::wstring templateName, CgtTemplate tl)
     {
         auto& state = detail::State();
