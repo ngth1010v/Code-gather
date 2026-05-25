@@ -92,7 +92,14 @@ namespace cgt::config
             }
             else if (section == detail::Section::Ignore)
             {
-                auto rule = detail::ToLower(line);
+                std::wstring rule = detail::ToLower(line);
+                bool dup = false;
+                for (std::wstring oldRule : state.ignoreRules)
+                    if (rule == oldRule) {
+                        dup = true;
+                        break;
+                    }
+                if (dup) continue;
                 state.ignoreRules.push_back(rule);
                 state.ruleComponentList.push_back(detail::ComponentSpliter(rule));
             }
