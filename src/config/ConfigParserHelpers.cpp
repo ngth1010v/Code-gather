@@ -33,6 +33,34 @@ namespace cgt::config::detail
         return {nums[0], nums[1], nums[2]};
     }
 
+    std::vector<std::wstring> ParseListLine(const std::wstring& value)
+    {
+        std::vector<std::wstring> items;
+        std::wstring current;
+
+        for (size_t i = 0; i <= value.size(); ++i)
+        {
+            const bool atEnd = (i == value.size());
+            const wchar_t ch = atEnd ? L',' : value[i];
+
+            if (ch == L',')
+            {
+                auto item = Trim(current);
+                if (!item.empty())
+                {
+                    items.push_back(std::move(item));
+                }
+                current.clear();
+            }
+            else
+            {
+                current.push_back(ch);
+            }
+        }
+
+        return items;
+    }
+
     int HandleGeneralLine(const std::wstring& line)
     {
         auto pos = line.find(L'=');
@@ -83,6 +111,81 @@ namespace cgt::config::detail
         }
 
         State().extColors[key] = rgb;
+        return 0;
+    }
+
+    static std::wstring NormalizeDirFilter(std::wstring value)
+    {
+        value = Trim(value);
+        for (auto& ch : value)
+        {
+            if (ch == L'\\') ch = L'/';
+        }
+        value = ToLower(value);
+
+        while (!value.empty() && value.front() == L'/')
+        {
+            value.erase(value.begin());
+        }
+
+        while (!value.empty() && value.back() == L'/')
+        {
+            value.pop_back();
+        }
+
+        return value;
+    }
+
+    int HandleTemplateLine(const std::wstring& templateName, const std::wstring& line)
+    {
+        auto pos = line.find(L'=');
+        if (pos == std::wstring::npos)
+        {
+            LogWarn(L"TEMPLATE line ignored: " + line);
+            return 0;
+        }
+
+        auto key = ToLower(Trim(line.substr(0, pos)));
+        auto value = Trim(line.substr(pos + 1));
+        auto& tl = State().templates[templateName];
+
+        if (key == L"output")
+        {
+            tl.output = WideToPath(value);
+        }
+        else if (key == L"fileprefix")
+        {
+            tl.filePrefix = value;
+        }
+        else if (key == L"extfilters")
+        {
+            tl.extFilters.clear();
+            for (auto item : ParseListLine(value))
+            {
+                item = NormalizeExt(item);
+                if (!item.empty())
+                {
+                    tl.extFilters.push_back(std::move(item));
+                }
+            }
+        }
+        else if (key == L"dirfilters")
+        {
+            tl.dirFilters.clear();
+            for (auto item : ParseListLine(value))
+            {
+                item = NormalizeDirFilter(std::move(item));
+                if (!item.empty())
+                {
+                    tl.dirFilters.push_back(std::move(item));
+                }
+            }
+        }
+        else
+        {
+            LogWarn(L"Unknown TEMPLATE key: " + key);
+        }
+
         return 0;
     }
 }

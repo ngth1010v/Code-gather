@@ -6,6 +6,20 @@
 
 namespace cgt::config
 {
+    static std::wstring JoinList(const std::vector<std::wstring>& items)
+    {
+        std::wstring result;
+        for (size_t i = 0; i < items.size(); ++i)
+        {
+            if (i > 0)
+            {
+                result += L",";
+            }
+            result += items[i];
+        }
+        return result;
+    }
+
     int Write()
     {
         auto& state = detail::State();
@@ -38,6 +52,31 @@ namespace cgt::config
         {
             fout << detail::ToNarrow(ext) << "="
                  << rgb.r << "," << rgb.g << "," << rgb.b << "\n";
+        }
+
+        if (!state.templates.empty())
+        {
+            fout << "\n";
+            bool firstTemplate = true;
+            for (const auto& [name, tl] : state.templates)
+            {
+                if (!firstTemplate)
+                {
+                    fout << "\n";
+                }
+                firstTemplate = false;
+
+                fout << "[TEMPLATE:" << detail::ToNarrow(name) << "]\n";
+                fout << "output=" << detail::ToNarrow(detail::PathToWide(tl.output)) << "\n";
+                fout << "filePrefix=" << detail::ToNarrow(tl.filePrefix) << "\n";
+                fout << "extFilters="
+                    << detail::ToNarrow(JoinList(tl.extFilters))
+                    << "\n";
+
+                fout << "dirFilters="
+                    << detail::ToNarrow(JoinList(tl.dirFilters))
+                    << "\n";
+                            }
         }
 
         return kStatusOk;

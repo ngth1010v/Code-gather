@@ -1,6 +1,6 @@
 #include "config/ConfigState.h"
 #include "config/ConfigParserHelpers.h"
-#include "config/ConfigIgnoreHelpers.h"   // thêm
+#include "config/ConfigIgnoreHelpers.h"
 
 #include <fstream>
 
@@ -28,6 +28,7 @@ namespace cgt::config
         }
 
         detail::Section section = detail::Section::None;
+        std::wstring currentTemplateName;
         std::string raw;
 
         while (std::getline(fin, raw))
@@ -42,14 +43,45 @@ namespace cgt::config
 
             if (line.front() == L'[' && line.back() == L']')
             {
-                auto name = detail::ToLower(detail::Trim(line.substr(1, line.size() - 2)));
-                if (name == L"general") section = detail::Section::General;
-                else if (name == L"ignore") section = detail::Section::Ignore;
-                else if (name == L"color") section = detail::Section::Color;
+                auto inside = detail::Trim(line.substr(1, line.size() - 2));
+                auto lowered = detail::ToLower(inside);
+
+                if (lowered == L"general")
+                {
+                    section = detail::Section::General;
+                    currentTemplateName.clear();
+                }
+                else if (lowered == L"ignore")
+                {
+                    section = detail::Section::Ignore;
+                    currentTemplateName.clear();
+                }
+                else if (lowered == L"color")
+                {
+                    section = detail::Section::Color;
+                    currentTemplateName.clear();
+                }
+                else if (lowered.rfind(L"template:", 0) == 0)
+                {
+                    auto pos = inside.find(L':');
+                    currentTemplateName = detail::NormalizeTemplateName(
+                        pos == std::wstring::npos ? L"" : inside.substr(pos + 1));
+
+                    if (currentTemplateName.empty())
+                    {
+                        section = detail::Section::None;
+                        detail::LogWarn(L"Template section has empty name: " + inside);
+                    }
+                    else
+                    {
+                        section = detail::Section::Template;
+                    }
+                }
                 else
                 {
                     section = detail::Section::None;
-                    detail::LogWarn(L"Unknown section: " + name);
+                    currentTemplateName.clear();
+                    detail::LogWarn(L"Unknown section: " + inside);
                 }
                 continue;
             }
@@ -67,6 +99,17 @@ namespace cgt::config
             else if (section == detail::Section::Color)
             {
                 detail::HandleColorLine(line);
+            }
+            else if (section == detail::Section::Template)
+            {
+                if (currentTemplateName.empty())
+                {
+                    detail::LogWarn(L"Template line ignored without valid template name: " + line);
+                }
+                else
+                {
+                    detail::HandleTemplateLine(currentTemplateName, line);
+                }
             }
             else
             {

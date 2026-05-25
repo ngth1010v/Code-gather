@@ -83,4 +83,72 @@ namespace cgt::config
         state.filePrefix = std::move(prefix);
         return Write();
     }
+
+    int SetTemplate(std::wstring templateName, CgtTemplate tl)
+    {
+        auto& state = detail::State();
+        if (!state.initialized)
+        {
+            detail::LogError(L"SetTemplate() called before Init().");
+            return kStatusNotInitialized;
+        }
+
+        templateName = detail::NormalizeTemplateName(std::move(templateName));
+        if (templateName.empty())
+        {
+            detail::LogError(L"SetTemplate() received empty templateName.");
+            return kStatusInvalidArg;
+        }
+
+        state.templates[templateName] = std::move(tl);
+        return Write();
+    }
+
+    int RemoveTemplate(std::wstring templateName)
+    {
+        auto& state = detail::State();
+        if (!state.initialized)
+        {
+            detail::LogError(L"RemoveTemplate() called before Init().");
+            return kStatusNotInitialized;
+        }
+
+        templateName = detail::NormalizeTemplateName(std::move(templateName));
+        if (templateName.empty())
+        {
+            detail::LogError(L"RemoveTemplate() received empty templateName.");
+            return kStatusInvalidArg;
+        }
+
+        auto it = state.templates.find(templateName);
+        if (it == state.templates.end())
+        {
+            detail::LogWarn(L"RemoveTemplate() template not found: " + templateName);
+            return kStatusInvalidArg;
+        }
+
+        state.templates.erase(it);
+        return Write();
+    }
+
+    CgtTemplate GetTemplate(std::wstring templateName)
+    {
+        templateName = detail::NormalizeTemplateName(std::move(templateName));
+        auto& state = detail::State();
+
+        if (templateName.empty())
+        {
+            detail::LogWarn(L"GetTemplate() received empty templateName.");
+            return {};
+        }
+
+        auto it = state.templates.find(templateName);
+        if (it == state.templates.end())
+        {
+            detail::LogWarn(L"GetTemplate() template not found: " + templateName);
+            return {};
+        }
+
+        return it->second;
+    }
 }

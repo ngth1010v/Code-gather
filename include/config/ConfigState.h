@@ -20,8 +20,9 @@ namespace cgt::config::detail
         fs::path outputFilePath;
         std::wstring filePrefix;
         std::vector<std::wstring> ignoreRules;
-        std::vector<std::vector<std::wstring>> ruleComponentList; // thêm dòng này
+        std::vector<std::vector<std::wstring>> ruleComponentList;
         std::map<std::wstring, RGB> extColors;
+        std::map<std::wstring, CgtTemplate> templates;
     };
 
     ConfigState& State();
@@ -29,6 +30,7 @@ namespace cgt::config::detail
     fs::path MakeConfigPath(const fs::path& workspaceDir);
 
     std::wstring NormalizeExt(std::wstring ext);
+    std::wstring NormalizeTemplateName(std::wstring templateName);
     std::wstring NormalizeLine(std::wstring line);
     std::wstring ToLower(std::wstring s);
     std::wstring Trim(const std::wstring& s);

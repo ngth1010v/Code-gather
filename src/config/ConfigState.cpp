@@ -5,7 +5,7 @@
 #include <locale>
 #include <random>
 
-#include "config/ConfigIgnoreHelpers.h"   // thêm
+#include "config/ConfigIgnoreHelpers.h"
 #include "config/Defaults.h"
 #include "log/Logger.h"
 
@@ -30,6 +30,7 @@ namespace cgt::config::detail
         }
 
         s.extColors = kDefaultExtColors;
+        s.templates.clear();
         s.outputFilePath = s.workspaceDir / std::wstring(kDefaultOutputFileName);
         s.filePrefix = std::wstring(kDefaultFilePrefix);
     }
@@ -91,6 +92,11 @@ namespace cgt::config::detail
             ext.erase(ext.begin());
         }
         return ToLower(ext);
+    }
+
+    std::wstring NormalizeTemplateName(std::wstring templateName)
+    {
+        return ToLower(Trim(std::move(templateName)));
     }
 
     std::wstring RelativeGeneric(const fs::path& p)

@@ -1,0 +1,4 @@
+Updated config template support:
+- Added CgtTemplate
+- Added SetTemplate / RemoveTemplate / GetTemplate
+- Added [TEMPLATE:name] parsing and writing
