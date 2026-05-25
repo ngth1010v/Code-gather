@@ -32,13 +32,16 @@ namespace cgt::app
     {
         wchar_t buffer[MAX_PATH * 4]{};
         DWORD len = GetCurrentDirectoryW(static_cast<DWORD>(sizeof(buffer) / sizeof(buffer[0])), buffer);
-        if (len == 0) return fs::current_path(); 
+        if (len == 0)
+        {
+            return fs::current_path();
+        }
         return fs::path(buffer, buffer + len);
     }
 
     static std::vector<std::size_t> ParseSelectionIds(const std::wstring& input,
-                                                     std::size_t maxCount,
-                                                     bool& hadAnyValid)
+                                                      std::size_t maxCount,
+                                                      bool& hadAnyValid)
     {
         std::vector<std::size_t> selected;
         hadAnyValid = false;
@@ -78,6 +81,7 @@ namespace cgt::app
                 cgt::log::Logger::Warning(L"Selection", L"Rejected invalid selection token: " + token);
                 continue;
             }
+
             if (id == 0 || id > maxCount)
             {
                 cgt::log::Logger::Warning(L"Selection", L"Ignored out-of-range id: " + token);
@@ -93,10 +97,10 @@ namespace cgt::app
     }
 
     static std::vector<io::GatheredBlock> BuildBlocks(const fs::path& root,
-                                                     const std::vector<scan::DiscoveredFile>& discovered,
-                                                     const std::vector<std::size_t>& selectionIds,
-                                                     const std::vector<fs::path>& directPaths,
-                                                     bool& hadAnyReadAttempt)
+                                                      const std::vector<scan::DiscoveredFile>& discovered,
+                                                      const std::vector<std::size_t>& selectionIds,
+                                                      const std::vector<fs::path>& directPaths,
+                                                      bool& hadAnyReadAttempt)
     {
         std::vector<io::GatheredBlock> blocks;
         io::FileReader reader;
@@ -107,7 +111,7 @@ namespace cgt::app
         auto addPath = [&](const fs::path& path)
         {
             const std::wstring key = cgt::util::NormalizeForCompare(path);
-            if (used.contains(key))
+            if (used.find(key) != used.end())
             {
                 return;
             }
@@ -141,25 +145,18 @@ namespace cgt::app
             }
         };
 
-        try
+        for (std::size_t idx : selectionIds)
         {
-            for (std::size_t idx : selectionIds)
+            if (idx == 0 || idx > discovered.size())
             {
-                if (idx == 0 || idx > discovered.size())
-                {
-                    continue;
-                }
-                addPath(discovered[idx - 1].absolutePath);
+                continue;
             }
-
-            for (const auto& direct : directPaths)
-            {
-                addPath(direct);
-            }
+            addPath(discovered[idx - 1].absolutePath);
         }
-        catch (...)
+
+        for (const auto& direct : directPaths)
         {
-            throw;
+            addPath(direct);
         }
 
         return blocks;
@@ -197,52 +194,48 @@ namespace cgt::app
             }
         }
 
-        // Update config
         {
             const std::wstring outputToken = args.GetFirstConfigValue(L"output", L"");
-            const std::wstring filePrefix  = args.GetFirstConfigValue(L"fileprefix", L"");      
+            const std::wstring filePrefix  = args.GetFirstConfigValue(L"fileprefix", L"");
 
-            // Khác default
-            if (outputToken != L""){
+            if (!outputToken.empty())
+            {
                 fs::path outputPath(outputToken);
                 config::SetOutputFilePath(outputPath);
             }
-            if (outputToken != L""){
+
+            if (!filePrefix.empty())
+            {
                 config::SetFilePrefix(filePrefix);
             }
         }
-        
+
         const std::wstring outputToken = config::GetOutputFilePath().wstring();
         const std::wstring filePrefix  = config::GetFilePrefix();
         const bool replace = args.HasFlag(L"replace");
 
-        // Lấy danh sách ext filters và dir filters trực tiếp từ ParsedArgs mới
         const std::vector<std::wstring> extFilters = args.GetExtFilters();
         const std::vector<std::wstring> dirFilters = args.GetDirFilters();
 
         const fs::path outputPath = ResolveTarget(rootDir, outputToken);
 
-        // Phân loại directPaths: Nếu là đường dẫn file cụ thể (không phải là thư mục hợp lệ)
         std::vector<fs::path> directPaths;
         for (const auto& token : dirFilters)
         {
             const fs::path resolved = cgt::util::ResolveFromRoot(rootDir, fs::path(token));
             fs::path normalPath = resolved.lexically_normal();
-            
-            // Nếu token trỏ trực tiếp đến 1 file cụ thể, đưa nó vào danh sách directPaths
+
             if (fs::exists(normalPath) && !fs::is_directory(normalPath))
             {
                 directPaths.push_back(normalPath);
             }
         }
 
-        // Nếu người dùng truyền đích danh file cụ thể trực tiếp mà không cấu hình luật quét ext/dir filter nào
         const bool onlyDirectPaths = !directPaths.empty() && extFilters.empty() && (dirFilters.size() == directPaths.size());
         std::vector<scan::DiscoveredFile> discovered;
 
         if (!onlyDirectPaths)
         {
-            // Sử dụng Scanner với 3 tham số mới: rootDir, extFilters, và dirFilters
             scan::DiscoveryScanner scanner(rootDir, extFilters, dirFilters);
             discovered = scanner.Scan();
 

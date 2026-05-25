@@ -1,91 +1,265 @@
 #include "io/TargetWriter.h"
 
-#include "util/EncodingUtil.h"
 #include <windows.h>
+
 #include <filesystem>
 #include <fstream>
+#include <string>
 #include <system_error>
+#include <vector>
+#include <algorithm>
 
 namespace cgt::io
 {
-    enum class FileEncoding
-    {
-        Utf16Le,
-        Utf16Be,
-        Utf8,
-        Ansi
-    };
+    namespace fs = std::filesystem;
 
-    // Hàm chuyển đổi từ wstring sang UTF-8 bytes
-    static std::string WideToUtf8Bytes(const std::wstring& wstr)
+    namespace
     {
-        if (wstr.empty()) return {};
-        int required = WideCharToMultiByte(CP_UTF8, 0, wstr.data(), static_cast<int>(wstr.size()), nullptr, 0, nullptr, nullptr);
-        if (required <= 0) return {};
-        std::string out(static_cast<std::size_t>(required), '\0');
-        WideCharToMultiByte(CP_UTF8, 0, wstr.data(), static_cast<int>(wstr.size()), out.data(), required, nullptr, nullptr);
-        return out;
-    }
-
-    // Hàm chuyển đổi từ wstring sang UTF-16LE bytes
-    static std::string WideToUtf16LeBytes(const std::wstring& wstr)
-    {
-        std::string out;
-        out.resize(wstr.size() * 2);
-        for (std::size_t i = 0; i < wstr.size(); ++i)
+        enum class FileEncoding
         {
-            unsigned int cp = static_cast<unsigned int>(wstr[i]);
-            out[i * 2] = static_cast<char>(cp & 0xFF);
-            out[i * 2 + 1] = static_cast<char>((cp >> 8) & 0xFF);
+            Utf8,
+            Utf16Le,
+            Utf16Be
+        };
+
+        static std::string WideToUtf8Bytes(const std::wstring& wstr)
+        {
+            if (wstr.empty())
+            {
+                return {};
+            }
+
+            const int required = WideCharToMultiByte(
+                CP_UTF8,
+                0,
+                wstr.data(),
+                static_cast<int>(wstr.size()),
+                nullptr,
+                0,
+                nullptr,
+                nullptr);
+
+            if (required <= 0)
+            {
+                return {};
+            }
+
+            std::string out(static_cast<std::size_t>(required), '\0');
+
+            WideCharToMultiByte(
+                CP_UTF8,
+                0,
+                wstr.data(),
+                static_cast<int>(wstr.size()),
+                out.data(),
+                required,
+                nullptr,
+                nullptr);
+
+            return out;
         }
-        return out;
-    }
 
-    // Hàm chuyển đổi từ wstring sang UTF-16BE bytes
-    static std::string WideToUtf16BeBytes(const std::wstring& wstr)
-    {
-        std::string out;
-        out.resize(wstr.size() * 2);
-        for (std::size_t i = 0; i < wstr.size(); ++i)
+        static std::string WideToUtf16LeBytes(const std::wstring& wstr)
         {
-            unsigned int cp = static_cast<unsigned int>(wstr[i]);
-            out[i * 2] = static_cast<char>((cp >> 8) & 0xFF);
-            out[i * 2 + 1] = static_cast<char>(cp & 0xFF);
+            std::string out;
+            out.resize(wstr.size() * 2);
+
+            for (std::size_t i = 0; i < wstr.size(); ++i)
+            {
+                const unsigned int cp = static_cast<unsigned int>(wstr[i]);
+
+                out[i * 2]     = static_cast<char>(cp & 0xFF);
+                out[i * 2 + 1] = static_cast<char>((cp >> 8) & 0xFF);
+            }
+
+            return out;
         }
-        return out;
-    }
 
-    // Hàm phụ trợ giúp nhận diện Encoding hiện tại của file (nếu có sẵn)
-    static FileEncoding DetectExistingFileEncoding(const fs::path& path)
-    {
-        std::ifstream file(path, std::ios::binary);
-        if (!file) return FileEncoding::Utf16Le; // Mặc định cho file mới
-
-        char bom[3] = {0};
-        file.read(bom, 3);
-        std::streamsize bytesRead = file.gcount();
-
-        if (bytesRead >= 3 && 
-            static_cast<unsigned char>(bom[0]) == 0xEF && 
-            static_cast<unsigned char>(bom[1]) == 0xBB && 
-            static_cast<unsigned char>(bom[2]) == 0xBF)
+        static std::string WideToUtf16BeBytes(const std::wstring& wstr)
         {
+            std::string out;
+            out.resize(wstr.size() * 2);
+
+            for (std::size_t i = 0; i < wstr.size(); ++i)
+            {
+                const unsigned int cp = static_cast<unsigned int>(wstr[i]);
+
+                out[i * 2]     = static_cast<char>((cp >> 8) & 0xFF);
+                out[i * 2 + 1] = static_cast<char>(cp & 0xFF);
+            }
+
+            return out;
+        }
+
+        static bool IsValidUtf8(const std::string& bytes)
+        {
+            if (bytes.empty())
+            {
+                return true;
+            }
+
+            const int required = MultiByteToWideChar(
+                CP_UTF8,
+                MB_ERR_INVALID_CHARS,
+                bytes.data(),
+                static_cast<int>(bytes.size()),
+                nullptr,
+                0);
+
+            return required > 0;
+        }
+
+        static double ZeroRatioAtParity(const std::string& bytes, std::size_t parity)
+        {
+            if (bytes.size() < 4)
+            {
+                return 0.0;
+            }
+
+            std::size_t hits = 0;
+            std::size_t total = 0;
+
+            for (std::size_t i = parity; i < bytes.size(); i += 2)
+            {
+                ++total;
+
+                if (static_cast<unsigned char>(bytes[i]) == 0x00)
+                {
+                    ++hits;
+                }
+            }
+
+            if (total == 0)
+            {
+                return 0.0;
+            }
+
+            return static_cast<double>(hits) / static_cast<double>(total);
+        }
+
+        static FileEncoding DetectExistingFileEncoding(const fs::path& path)
+        {
+            std::ifstream file(path, std::ios::binary);
+
+            if (!file)
+            {
+                return FileEncoding::Utf8;
+            }
+
+            std::vector<char> buffer(8192);
+
+            file.read(buffer.data(), static_cast<std::streamsize>(buffer.size()));
+
+            const std::streamsize bytesRead = file.gcount();
+
+            buffer.resize(static_cast<std::size_t>(
+                std::max<std::streamsize>(0, bytesRead)));
+
+            if (buffer.empty())
+            {
+                return FileEncoding::Utf8;
+            }
+
+            const std::string bytes(buffer.begin(), buffer.end());
+
+            if (bytes.size() >= 3 &&
+                static_cast<unsigned char>(bytes[0]) == 0xEF &&
+                static_cast<unsigned char>(bytes[1]) == 0xBB &&
+                static_cast<unsigned char>(bytes[2]) == 0xBF)
+            {
+                return FileEncoding::Utf8;
+            }
+
+            if (bytes.size() >= 2 &&
+                static_cast<unsigned char>(bytes[0]) == 0xFF &&
+                static_cast<unsigned char>(bytes[1]) == 0xFE)
+            {
+                return FileEncoding::Utf16Le;
+            }
+
+            if (bytes.size() >= 2 &&
+                static_cast<unsigned char>(bytes[0]) == 0xFE &&
+                static_cast<unsigned char>(bytes[1]) == 0xFF)
+            {
+                return FileEncoding::Utf16Be;
+            }
+
+            if (IsValidUtf8(bytes))
+            {
+                return FileEncoding::Utf8;
+            }
+
+            const double oddZeroRatio  = ZeroRatioAtParity(bytes, 1);
+            const double evenZeroRatio = ZeroRatioAtParity(bytes, 0);
+
+            if (oddZeroRatio > 0.30 && evenZeroRatio < 0.15)
+            {
+                return FileEncoding::Utf16Le;
+            }
+
+            if (evenZeroRatio > 0.30 && oddZeroRatio < 0.15)
+            {
+                return FileEncoding::Utf16Be;
+            }
+
             return FileEncoding::Utf8;
         }
-        if (bytesRead >= 2 && 
-            static_cast<unsigned char>(bom[0]) == 0xFF && 
-            static_cast<unsigned char>(bom[1]) == 0xFE)
+
+        static std::string EncodeText(const std::wstring& text,
+                                      FileEncoding encoding)
         {
-            return FileEncoding::Utf16Le;
-        }
-        if (bytesRead >= 2 && 
-            static_cast<unsigned char>(bom[0]) == 0xFE && 
-            static_cast<unsigned char>(bom[1]) == 0xFF)
-        {
-            return FileEncoding::Utf16Be;
+            switch (encoding)
+            {
+                case FileEncoding::Utf16Le:
+                    return WideToUtf16LeBytes(text);
+
+                case FileEncoding::Utf16Be:
+                    return WideToUtf16BeBytes(text);
+
+                case FileEncoding::Utf8:
+                default:
+                    return WideToUtf8Bytes(text);
+            }
         }
 
-        return FileEncoding::Utf16Le; // Fallback mặc định
+        static std::string GetBom(FileEncoding encoding)
+        {
+            switch (encoding)
+            {
+                case FileEncoding::Utf8:
+                    return std::string("\xEF\xBB\xBF", 3);
+
+                case FileEncoding::Utf16Le:
+                    return std::string("\xFF\xFE", 2);
+
+                case FileEncoding::Utf16Be:
+                    return std::string("\xFE\xFF", 2);
+
+                default:
+                    return {};
+            }
+        }
+
+        static bool WriteBytes(std::ofstream& file,
+                               const std::string& bytes)
+        {
+            if (bytes.empty())
+            {
+                return true;
+            }
+
+            file.write(bytes.data(),
+                       static_cast<std::streamsize>(bytes.size()));
+
+            return static_cast<bool>(file);
+        }
+
+        static bool WriteText(std::ofstream& file,
+                              const std::wstring& text,
+                              FileEncoding encoding)
+        {
+            return WriteBytes(file, EncodeText(text, encoding));
+        }
     }
 
     bool TargetWriter::Write(const fs::path& targetPath,
@@ -97,22 +271,53 @@ namespace cgt::io
         errorMessage.clear();
 
         std::error_code ec;
+
         if (!targetPath.parent_path().empty())
         {
             fs::create_directories(targetPath.parent_path(), ec);
+
+            if (ec)
+            {
+                errorMessage = L"Cannot create target directory.";
+                return false;
+            }
         }
 
         const bool exists = fs::exists(targetPath, ec);
-        const auto size = exists ? fs::file_size(targetPath, ec) : 0;
 
-        // Xác định Encoding sẽ sử dụng để viết tiếp hoặc tạo mới
-        FileEncoding encoding = FileEncoding::Utf16Le; // Mặc định cho file tạo mới hoàn toàn
-        if (exists && !replace && size > 0)
+        if (ec)
+        {
+            errorMessage = L"Cannot inspect target file.";
+            return false;
+        }
+
+        std::uintmax_t size = 0;
+
+        if (exists)
+        {
+            size = fs::file_size(targetPath, ec);
+
+            if (ec)
+            {
+                size = 0;
+                ec.clear();
+            }
+        }
+
+        const bool needHeader =
+            replace || !exists || size == 0;
+
+        FileEncoding encoding = FileEncoding::Utf8;
+
+        if (!needHeader && exists)
         {
             encoding = DetectExistingFileEncoding(targetPath);
         }
 
-        std::ios::openmode mode = std::ios::binary | std::ios::out;
+        std::ios::openmode mode =
+            std::ios::binary |
+            std::ios::out;
+
         if (replace)
         {
             mode |= std::ios::trunc;
@@ -123,65 +328,72 @@ namespace cgt::io
         }
 
         std::ofstream file(targetPath, mode);
+
         if (!file)
         {
             errorMessage = L"Cannot open target file for writing.";
             return false;
         }
 
-        // Lambda mã hóa chuỗi wstring theo encoding đã chọn
-        auto EncodeText = [encoding](const std::wstring& text) -> std::string {
-            switch (encoding)
-            {
-                case FileEncoding::Utf8:     return WideToUtf8Bytes(text);
-                case FileEncoding::Utf16Be:   return WideToUtf16BeBytes(text);
-                case FileEncoding::Utf16Le:
-                default:                     return WideToUtf16LeBytes(text);
-            }
-        };
-
-        const bool needHeader = replace || !exists || size == 0;
         if (needHeader)
         {
-            // Ghi BOM tương ứng cho từng loại Encoding file mới
-            std::string bom;
-            if (encoding == FileEncoding::Utf8)      bom = "\xEF\xBB\xBF";
-            else if (encoding == FileEncoding::Utf16Le) bom = "\xFF\xFE";
-            else if (encoding == FileEncoding::Utf16Be) bom = "\xFE\xFF";
-
-            if (!bom.empty())
+            if (!WriteBytes(file, GetBom(encoding)))
             {
-                file.write(bom.data(), static_cast<std::streamsize>(bom.size()));
+                errorMessage = L"Failed while writing BOM.";
+                return false;
             }
 
-            const std::wstring header = L"*CODE:\n";
-            std::string headerBytes = EncodeText(header);
-            file.write(headerBytes.data(), static_cast<std::streamsize>(headerBytes.size()));
+            if (!WriteText(file, L"*CODE:\n", encoding))
+            {
+                errorMessage = L"Failed while writing header.";
+                return false;
+            }
         }
         else
         {
-            std::string newlineBytes = EncodeText(L"\n");
-            file.write(newlineBytes.data(), static_cast<std::streamsize>(newlineBytes.size()));
+            if (!WriteText(file, L"\n", encoding))
+            {
+                errorMessage = L"Failed while preparing append.";
+                return false;
+            }
         }
 
         for (const auto& block : blocks)
         {
-            std::wstring startLine = prefix + L"START " + block.relativePath + L"\n";
-            std::wstring endLine = prefix + L"END " + block.relativePath + L"\n";
+            const std::wstring startLine =
+                prefix + L"START " + block.relativePath + L"\n";
 
-            const std::string startBytes = EncodeText(startLine);
-            const std::string bodyBytes = EncodeText(block.content);
-            const std::string endBytes = EncodeText(endLine);
+            const std::wstring endLine =
+                prefix + L"END " + block.relativePath + L"\n";
 
-            file.write(startBytes.data(), static_cast<std::streamsize>(startBytes.size()));
-            file.write(bodyBytes.data(), static_cast<std::streamsize>(bodyBytes.size()));
-            
-            if (block.content.empty() || (block.content.back() != L'\n' && block.content.back() != L'\r'))
+            if (!WriteText(file, startLine, encoding))
             {
-                std::string blockNewline = EncodeText(L"\n");
-                file.write(blockNewline.data(), static_cast<std::streamsize>(blockNewline.size()));
+                errorMessage = L"Failed while writing block header.";
+                return false;
             }
-            file.write(endBytes.data(), static_cast<std::streamsize>(endBytes.size()));
+
+            if (!WriteText(file, block.content, encoding))
+            {
+                errorMessage = L"Failed while writing block body.";
+                return false;
+            }
+
+            if (block.content.empty() ||
+                (block.content.back() != L'\n' &&
+                 block.content.back() != L'\r'))
+            {
+                if (!WriteText(file, L"\n", encoding))
+                {
+                    errorMessage = L"Failed while writing newline.";
+                    return false;
+                }
+            }
+
+            if (!WriteText(file, endLine, encoding))
+            {
+                errorMessage = L"Failed while writing block footer.";
+                return false;
+            }
         }
 
         if (!file)
