@@ -23,55 +23,130 @@ cgt
 
 ---
 
-# ⚡ Usage
+# ⚡ CLI
 
-### Gather all readable source files
+## Core CLI
 
 ```bash
-cgt
+cgt <config> <flag> <template> <filter>
 ```
 
-### Filter by extension
+All components can appear in any order.
+
+---
+
+## Config
+
+### Output file
 
 ```bash
-cgt .cpp .h
-```
-
-### Filter by directory
-
-```bash
-cgt include "dir with space"
-```
-
-### Gather a specific file
-
-```bash
-cgt src/main.cpp
-```
-
-### Replace output instead of append
-
-```bash
-cgt --replace
-```
-
-### Custom output file
-
-```bash
-cgt --output=result.txt
+--output=result.txt
 ```
 
 ### Custom file prefix
 
 ```bash
-cgt --filePrefix=##
+--filePrefix=##
+```
+
+---
+
+## Flags
+
+### Replace output instead of append
+
+```bash
+--replace
+```
+
+---
+
+## Templates
+
+### Apply template
+
+```bash
+-cpp
+```
+
+### Apply template with space in name
+
+```bash
+" -my template "
+```
+
+Behavior:
+- only the first existing template is used
+- if multiple templates are provided:
+  - invalid templates are skipped
+  - first existing template is applied
+  - remaining templates are ignored with warning
+
+CLI config always overrides template config.
+
+CLI filters are appended to template filters without duplicates.
+
+---
+
+## Filters
+
+### Extension filter
+
+```bash
+.cpp
+.h
+```
+
+### Directory filter
+
+```bash
+src
+include
+```
+
+### Direct file
+
+```bash
+src/main.cpp
+```
+
+---
+
+# 🧩 Template Commands
+
+## Create / Update Template
+
+```bash
+cgt setTemplate <templateName> <config> <filter>
+```
+
+Example:
+
+```bash
+cgt setTemplate cpp .cpp .h include src
+```
+
+---
+
+## Remove Template
+
+### Remove one template
+
+```bash
+cgt rmTemplate cpp
+```
+
+### Remove all templates
+
+```bash
+cgt rmTemplate --all
 ```
 
 ---
 
 # 🖥️ Console Output
 
-### Example
+## Example
 
 ```text
 Found files:
@@ -82,11 +157,14 @@ Found files:
 2     └── main.cpp
 ```
 
-- Numbered entries = selectable discovered files
-- Each extension has its own color
-- Colors can be customized in `.cgtconfig`
+Properties:
+- numbered entries are selectable
+- each extension has its own color
+- colors are configurable in `.cgtconfig`
 
-### File Selection
+---
+
+# 📌 File Selection
 
 ```text
 1 2
@@ -102,7 +180,13 @@ or
 
 # 📄 Result Output
 
-Generated output format with --filePrefix=**:
+Generated output format with:
+
+```bash
+--filePrefix=**
+```
+
+Result:
 
 ```text
 *CODE:
@@ -133,12 +217,13 @@ Used for:
 - extension colors
 - output path
 - file prefix
+- templates
 
 ---
 
 # 🧱 Config Format
 
-## 📌 Example
+## Example
 
 ```ini
 [GENERAL]
@@ -167,11 +252,19 @@ jsx=120,220,255
 tsx=120,255,220
 gitignore=180,180,180
 cgtconfig=255,180,255
+
+[TEMPLATE:cpp]
+output=cpp-result.txt
+filePrefix=**
+ext=.cpp
+ext=.h
+dir=src
+dir=include
 ```
 
 ---
 
-## 🚫 Ignore Rules
+# 🚫 Ignore Rules
 
 Ignore rules are component-based path matchers.
 
@@ -193,9 +286,9 @@ include/*.txt
 
 ---
 
-## 🧩 Ignore Rule Syntax
+# 🧩 Ignore Rule Syntax
 
-### Exact Component Match
+## Exact Component Match
 
 Matches an exact component.
 
@@ -217,7 +310,7 @@ src/include/data/
 
 ---
 
-### `*name`
+## `*name`
 
 Matches a component in the current level if the component ends with `name`.
 
@@ -240,7 +333,7 @@ dir/hello.txt
 
 ---
 
-### `**name`
+## `**name`
 
 Matches any component recursively if the component ends with `name`.
 
@@ -258,11 +351,11 @@ src/test/a.txt
 
 ---
 
-## 📁 Directory Rules
+# 📁 Directory Rules
 
 Directory rules should end with `/`.
 
-### Ignore exact directory level
+## Ignore exact directory level
 
 ```text
 build/
@@ -282,7 +375,7 @@ src/build/
 
 ---
 
-### Ignore directory recursively
+## Ignore directory recursively
 
 ```text
 **build/
@@ -298,9 +391,9 @@ a/b/c/build/
 
 ---
 
-## 🧪 Ignore Rule Examples
+# 🧪 Ignore Rule Examples
 
-### Ignore root `.git`
+## Ignore root `.git`
 
 ```text
 .git/
@@ -308,7 +401,7 @@ a/b/c/build/
 
 ---
 
-### Ignore all `.obj` files recursively
+## Ignore all `.obj` files recursively
 
 ```text
 **.obj
@@ -316,7 +409,7 @@ a/b/c/build/
 
 ---
 
-### Ignore generated headers inside `include/`
+## Ignore generated headers inside `include/`
 
 ```text
 include/*.gen.h
@@ -336,7 +429,7 @@ include/core/test.gen.h
 
 ---
 
-### Ignore every `temp/` directory recursively
+## Ignore every `temp/` directory recursively
 
 ```text
 **temp/
@@ -352,7 +445,7 @@ a/b/temp/
 
 ---
 
-## 📌 Default Ignore Rules
+# 📌 Default Ignore Rules
 
 ```text
 .vscode/

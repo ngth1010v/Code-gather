@@ -4,19 +4,26 @@
 
 namespace cgt::cli
 {
-    ParsedArgs ArgParser::Parse(int argc, wchar_t* argv[]) const
+    namespace
     {
-        ParsedArgs parsed;
-
-        for (int i = 1; i < argc; ++i)
+        static std::wstring NormalizeToken(const std::wstring& token)
         {
-            std::wstring token = util::Trim(argv[i]);
+            return util::StripQuotes(util::Trim(token));
+        }
+
+        static bool IsHelpToken(const std::wstring& token)
+        {
+            return util::ToLower(NormalizeToken(token)) == L"--help";
+        }
+
+        static void ParseCoreToken(ParsedArgs& parsed, const std::wstring& rawToken)
+        {
+            std::wstring token = NormalizeToken(rawToken);
             if (token.empty())
             {
-                continue;
+                return;
             }
 
-            // Xử lý các tham số dạng --key=value hoặc --flag
             if (token.rfind(L"--", 0) == 0)
             {
                 token = token.substr(2);
@@ -30,7 +37,7 @@ namespace cgt::cli
                         parsed.flags.insert(flag);
                         parsed.orderedFlags.push_back(flag);
                     }
-                    continue;
+                    return;
                 }
 
                 std::wstring key = util::Trim(token.substr(0, eq));
@@ -44,32 +51,184 @@ namespace cgt::cli
                 }
                 else
                 {
-                    parsed.unknownTokens.push_back(argv[i]);
+                    parsed.unknownTokens.push_back(rawToken);
                 }
-                continue;
+                return;
             }
 
-            // Xử lý các flag hoặc token không hợp lệ bắt đầu bằng '-'
-            if (token[0] == L'-')
+            parsed.sourceArgs.push_back(token);
+
+            if (token[0] == L'-' && token.size() > 1)
             {
-                parsed.unknownTokens.push_back(token);
-                continue;
+                parsed.templateNames.push_back(token.substr(1));
+                return;
             }
 
-            // Lưu lại token gốc vào sourceArgs trước khi phân loại sâu hơn
+            if (token[0] == L'.')
+            {
+                parsed.extFilters.push_back(token);
+                return;
+            }
+
+            parsed.dirFilters.push_back(token);
+        }
+
+        static void ParseSetTemplateToken(ParsedArgs& parsed, const std::wstring& rawToken)
+        {
+            std::wstring token = NormalizeToken(rawToken);
+            if (token.empty())
+            {
+                return;
+            }
+
+            if (token.rfind(L"--", 0) == 0)
+            {
+                token = token.substr(2);
+                const std::size_t eq = token.find(L'=');
+                if (eq == std::wstring::npos)
+                {
+                    parsed.unknownTokens.push_back(rawToken);
+                    return;
+                }
+
+                std::wstring key = util::Trim(token.substr(0, eq));
+                std::wstring value = util::StripQuotes(token.substr(eq + 1));
+                key = util::ToLower(key);
+                value = util::StripQuotes(value);
+
+                if (!key.empty())
+                {
+                    parsed.configValues[key].push_back(value);
+                }
+                else
+                {
+                    parsed.unknownTokens.push_back(rawToken);
+                }
+                return;
+            }
+
             parsed.sourceArgs.push_back(token);
 
             if (token[0] == L'.')
             {
-                // Arg bắt đầu bằng "." -> đưa vào extFilters
                 parsed.extFilters.push_back(token);
+                return;
             }
-            else
+
+            if (token[0] == L'-')
             {
-                // Arg không bắt đầu bằng "." hay "-" -> đưa vào dirFilters
-                // Xử lý loại bỏ dấu nháy (nếu có) phòng trường hợp đường dẫn chứa khoảng trắng
-                parsed.dirFilters.push_back(util::StripQuotes(token));
+                parsed.unknownTokens.push_back(rawToken);
+                return;
             }
+
+            parsed.dirFilters.push_back(token);
+        }
+
+        static void ParseRemoveTemplateToken(ParsedArgs& parsed, const std::wstring& rawToken)
+        {
+            std::wstring token = NormalizeToken(rawToken);
+            if (token.empty())
+            {
+                return;
+            }
+
+            if (token.rfind(L"--", 0) != 0)
+            {
+                parsed.unknownTokens.push_back(rawToken);
+                return;
+            }
+
+            token = token.substr(2);
+            const std::size_t eq = token.find(L'=');
+
+            if (eq != std::wstring::npos)
+            {
+                parsed.unknownTokens.push_back(rawToken);
+                return;
+            }
+
+            std::wstring flag = util::ToLower(util::Trim(token));
+            if (flag.empty())
+            {
+                parsed.unknownTokens.push_back(rawToken);
+                return;
+            }
+
+            parsed.flags.insert(flag);
+            parsed.orderedFlags.push_back(flag);
+        }
+    }
+
+    ParsedArgs ArgParser::Parse(int argc, wchar_t* argv[]) const
+    {
+        ParsedArgs parsed;
+
+        if (argc <= 1)
+        {
+            return parsed;
+        }
+
+        for (int i = 1; i < argc; ++i)
+        {
+            if (IsHelpToken(argv[i]))
+            {
+                parsed.mode = ParsedArgs::Mode::Help;
+                return parsed;
+            }
+        }
+
+        const std::wstring firstToken = NormalizeToken(argv[1]);
+        const std::wstring firstLower = util::ToLower(firstToken);
+
+        if (firstLower == L"settemplate")
+        {
+            parsed.mode = ParsedArgs::Mode::SetTemplate;
+
+            if (argc >= 3)
+            {
+                parsed.templateNames.push_back(NormalizeToken(argv[2]));
+            }
+
+            for (int i = 3; i < argc; ++i)
+            {
+                ParseSetTemplateToken(parsed, argv[i]);
+            }
+
+            return parsed;
+        }
+
+        if (firstLower == L"rmtemplate")
+        {
+            parsed.mode = ParsedArgs::Mode::RemoveTemplate;
+
+            for (int i = 2; i < argc; ++i)
+            {
+                std::wstring token = NormalizeToken(argv[i]);
+
+                if (token.rfind(L"--", 0) == 0)
+                {
+                    ParseRemoveTemplateToken(parsed, token);
+                    continue;
+                }
+
+                if (parsed.templateNames.empty())
+                {
+                    parsed.templateNames.push_back(token);
+                }
+                else
+                {
+                    parsed.unknownTokens.push_back(token);
+                }
+            }
+
+            return parsed;
+        }
+
+        parsed.mode = ParsedArgs::Mode::Core;
+
+        for (int i = 1; i < argc; ++i)
+        {
+            ParseCoreToken(parsed, argv[i]);
         }
 
         return parsed;

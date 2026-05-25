@@ -9,9 +9,20 @@ namespace cgt::cli
 {
     struct ParsedArgs
     {
+        enum class Mode
+        {
+            Core,
+            Help,
+            SetTemplate,
+            RemoveTemplate
+        };
+
+        Mode mode = Mode::Core;
+
         std::vector<std::wstring> sourceArgs;
-        std::vector<std::wstring> extFilters;   // Lưu trữ các định dạng file (.txt, .cpp...)
-        std::vector<std::wstring> dirFilters;   // Lưu trữ đường dẫn thư mục
+        std::vector<std::wstring> extFilters;
+        std::vector<std::wstring> dirFilters;
+        std::vector<std::wstring> templateNames;
         std::vector<std::wstring> unknownTokens;
 
         // Giữ lại cả 2:
@@ -26,8 +37,9 @@ namespace cgt::cli
         std::wstring GetFirstConfigValue(const std::wstring& key, const std::wstring& defaultValue = L"") const;
         std::vector<std::wstring> GetConfigValues(const std::wstring& key) const;
 
-        std::vector<std::wstring> GetExtFilters() const { return extFilters; }
-        std::vector<std::wstring> GetDirFilters() const { return dirFilters; }
+        const std::vector<std::wstring>& GetExtFilters() const { return extFilters; }
+        const std::vector<std::wstring>& GetDirFilters() const { return dirFilters; }
         const std::vector<std::wstring>& GetOrderedFlags() const { return orderedFlags; }
+        const std::vector<std::wstring>& GetTemplateNames() const { return templateNames; }
     };
 }
