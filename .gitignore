@@ -6,3 +6,5 @@ test[0-9].txt
 .cgtconfig
 cgt-result.txt
 **.exe
+_templates/
+_prompts/
