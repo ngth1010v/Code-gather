@@ -9,7 +9,6 @@ namespace cgt::config
 {
     inline constexpr std::wstring_view kConfigFileName = L".cgtconfig";
     inline constexpr std::wstring_view kDefaultOutputFileName = L"cgt-result.txt";
-    inline constexpr std::wstring_view kDefaultFilePrefix = L"**";
 
     inline constexpr int kStatusOk = 0;
     inline constexpr int kStatusNotInitialized = -1;

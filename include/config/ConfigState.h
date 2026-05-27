@@ -18,7 +18,6 @@ namespace cgt::config::detail
         fs::path workspaceDir;
         fs::path configPath;
         fs::path outputFilePath;
-        std::wstring filePrefix;
         std::map<std::wstring, RGB> extColors;
         std::map<std::wstring, CgtTemplate> templates;
     };

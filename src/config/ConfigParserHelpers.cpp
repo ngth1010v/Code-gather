@@ -90,10 +90,6 @@ namespace cgt::config::detail
         {
             state.outputFilePath = WideToPath(value);
         }
-        else if (key == L"fileprefix")
-        {
-            state.filePrefix = value;
-        }
         else
         {
             LogWarn(L"Unknown GENERAL key: " + key);
@@ -142,10 +138,6 @@ namespace cgt::config::detail
         if (key == L"output")
         {
             tl.output = WideToPath(value);
-        }
-        else if (key == L"fileprefix")
-        {
-            tl.filePrefix = value;
         }
         else if (key == L"filters")
         {

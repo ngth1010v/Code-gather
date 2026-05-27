@@ -39,7 +39,6 @@ namespace cgt::config
 
         fout << "[GENERAL]\n";
         fout << "output=" << detail::ToNarrow(detail::PathToWide(state.outputFilePath)) << "\n";
-        fout << "filePrefix=" << detail::ToNarrow(state.filePrefix) << "\n\n";
 
         fout << "[IGNORE]\n";
         for (const auto& rule : cgt::filter::GetIgnores())
@@ -69,7 +68,6 @@ namespace cgt::config
 
                 fout << "[TEMPLATE:" << detail::ToNarrow(name) << "]\n";
                 fout << "output=" << detail::ToNarrow(detail::PathToWide(tl.output)) << "\n";
-                fout << "filePrefix=" << detail::ToNarrow(tl.filePrefix) << "\n";
                 fout << "filters=" << detail::ToNarrow(JoinList(tl.filters)) << "\n";
             }
         }

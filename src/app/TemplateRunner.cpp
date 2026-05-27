@@ -20,14 +20,12 @@ namespace cgt::app
 
         RuntimeState state;
         state.outputToken = cgt::config::GetOutputFilePath().wstring();
-        state.filePrefix = cgt::config::GetFilePrefix();
 
         ApplyConfigOverrides(args, state);
         CollectCliFilters(args, state);
 
         cgt::config::CgtTemplate tl;
         tl.output = state.outputToken;
-        tl.filePrefix = state.filePrefix;
         tl.filters = state.filters;
 
         cgt::config::SetTemplate(names.front(), tl);

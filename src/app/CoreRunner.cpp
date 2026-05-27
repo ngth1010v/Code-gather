@@ -21,7 +21,6 @@ namespace cgt::app
 
         RuntimeState state;
         state.outputToken = cgt::config::GetOutputFilePath().wstring();
-        state.filePrefix = cgt::config::GetFilePrefix();
 
         ApplyFirstExistingTemplate(args, state);
         ApplyConfigOverrides(args, state);
@@ -30,10 +29,10 @@ namespace cgt::app
         cgt::config::Write();
         SyncGlobalFilters(state.filters);
 
-        const bool replace = args.HasFlag(L"replace");
+        const bool replace = args.HasFlag(L"replace") || args.HasFlag(L"r");
+        const bool wrapped = !(args.HasFlag(L"nowrapped") || args.HasFlag(L"nw"));
 
         const fs::path outputPath = ResolveTarget(rootDir, state.outputToken);
-        const std::wstring filePrefix = state.filePrefix;
 
         scan::DiscoveryScanner scanner(rootDir);
         std::vector<scan::DiscoveredFile> discovered = scanner.Scan();
@@ -94,7 +93,7 @@ namespace cgt::app
         std::wstring errorMessage;
         while (true)
         {
-            if (writer.Write(outputPath, filePrefix, replace, blocks, errorMessage))
+            if (writer.Write(outputPath, wrapped, replace, blocks, errorMessage))
             {
                 cgt::log::Logger::Info(L"TargetWriter", L"Wrote output to " + cgt::util::RelativeDisplayPath(rootDir, outputPath));
                 return 0;

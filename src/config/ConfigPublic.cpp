@@ -59,31 +59,6 @@ namespace cgt::config
         return Write();
     }
 
-    std::wstring GetFilePrefix()
-    {
-        return detail::State().filePrefix;
-    }
-
-    int SetFilePrefix(std::wstring prefix)
-    {
-        auto& state = detail::State();
-        if (!state.initialized)
-        {
-            detail::LogError(L"SetFilePrefix() called before Init().");
-            return kStatusNotInitialized;
-        }
-
-        prefix = detail::Trim(prefix);
-        if (prefix.empty())
-        {
-            detail::LogError(L"SetFilePrefix() received empty value.");
-            return kStatusInvalidArg;
-        }
-
-        state.filePrefix = std::move(prefix);
-        return Write();
-    }
-
     bool HasTemplate(std::wstring templateName)
     {
         templateName = detail::NormalizeTemplateName(std::move(templateName));

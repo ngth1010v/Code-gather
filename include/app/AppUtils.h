@@ -27,7 +27,8 @@ namespace cgt::app
     struct RuntimeState
     {
         std::wstring outputToken = L"cgt-result.txt";
-        std::wstring filePrefix = L"**";
+        bool wrapped = false;
+        bool replace = false;
         std::vector<std::wstring> filters;
     };
 

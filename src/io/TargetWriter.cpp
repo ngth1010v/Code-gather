@@ -2,12 +2,12 @@
 
 #include <windows.h>
 
+#include <algorithm>
 #include <filesystem>
 #include <fstream>
 #include <string>
 #include <system_error>
 #include <vector>
-#include <algorithm>
 
 namespace cgt::io
 {
@@ -109,7 +109,8 @@ namespace cgt::io
             return required > 0;
         }
 
-        static double ZeroRatioAtParity(const std::string& bytes, std::size_t parity)
+        static double ZeroRatioAtParity(const std::string& bytes,
+                                        std::size_t parity)
         {
             if (bytes.size() < 4)
             {
@@ -134,10 +135,12 @@ namespace cgt::io
                 return 0.0;
             }
 
-            return static_cast<double>(hits) / static_cast<double>(total);
+            return static_cast<double>(hits) /
+                   static_cast<double>(total);
         }
 
-        static FileEncoding DetectExistingFileEncoding(const fs::path& path)
+        static FileEncoding DetectExistingFileEncoding(
+            const fs::path& path)
         {
             std::ifstream file(path, std::ios::binary);
 
@@ -148,7 +151,8 @@ namespace cgt::io
 
             std::vector<char> buffer(8192);
 
-            file.read(buffer.data(), static_cast<std::streamsize>(buffer.size()));
+            file.read(buffer.data(),
+                      static_cast<std::streamsize>(buffer.size()));
 
             const std::streamsize bytesRead = file.gcount();
 
@@ -189,15 +193,20 @@ namespace cgt::io
                 return FileEncoding::Utf8;
             }
 
-            const double oddZeroRatio  = ZeroRatioAtParity(bytes, 1);
-            const double evenZeroRatio = ZeroRatioAtParity(bytes, 0);
+            const double oddZeroRatio =
+                ZeroRatioAtParity(bytes, 1);
 
-            if (oddZeroRatio > 0.30 && evenZeroRatio < 0.15)
+            const double evenZeroRatio =
+                ZeroRatioAtParity(bytes, 0);
+
+            if (oddZeroRatio > 0.30 &&
+                evenZeroRatio < 0.15)
             {
                 return FileEncoding::Utf16Le;
             }
 
-            if (evenZeroRatio > 0.30 && oddZeroRatio < 0.15)
+            if (evenZeroRatio > 0.30 &&
+                oddZeroRatio < 0.15)
             {
                 return FileEncoding::Utf16Be;
             }
@@ -258,12 +267,26 @@ namespace cgt::io
                               const std::wstring& text,
                               FileEncoding encoding)
         {
-            return WriteBytes(file, EncodeText(text, encoding));
+            return WriteBytes(file,
+                              EncodeText(text, encoding));
+        }
+
+        static std::wstring GetCodeFenceExt(
+            const fs::path& path)
+        {
+            std::wstring ext = path.extension().wstring();
+
+            if (!ext.empty() && ext.front() == L'.')
+            {
+                ext.erase(ext.begin());
+            }
+
+            return ext;
         }
     }
 
     bool TargetWriter::Write(const fs::path& targetPath,
-                             const std::wstring& prefix,
+                             bool wrapped,
                              bool replace,
                              const std::vector<GatheredBlock>& blocks,
                              std::wstring& errorMessage) const
@@ -278,7 +301,9 @@ namespace cgt::io
 
             if (ec)
             {
-                errorMessage = L"Cannot create target directory.";
+                errorMessage =
+                    L"Cannot create target directory.";
+
                 return false;
             }
         }
@@ -287,7 +312,9 @@ namespace cgt::io
 
         if (ec)
         {
-            errorMessage = L"Cannot inspect target file.";
+            errorMessage =
+                L"Cannot inspect target file.";
+
             return false;
         }
 
@@ -311,7 +338,8 @@ namespace cgt::io
 
         if (!needHeader && exists)
         {
-            encoding = DetectExistingFileEncoding(targetPath);
+            encoding =
+                DetectExistingFileEncoding(targetPath);
         }
 
         std::ios::openmode mode =
@@ -331,7 +359,9 @@ namespace cgt::io
 
         if (!file)
         {
-            errorMessage = L"Cannot open target file for writing.";
+            errorMessage =
+                L"Cannot open target file for writing.";
+
             return false;
         }
 
@@ -339,66 +369,142 @@ namespace cgt::io
         {
             if (!WriteBytes(file, GetBom(encoding)))
             {
-                errorMessage = L"Failed while writing BOM.";
+                errorMessage =
+                    L"Failed while writing BOM.";
+
                 return false;
             }
 
-            if (!WriteText(file, L"*CODE:\n", encoding))
-            {
-                errorMessage = L"Failed while writing header.";
-                return false;
-            }
+
         }
         else
         {
             if (!WriteText(file, L"\n", encoding))
             {
-                errorMessage = L"Failed while preparing append.";
+                errorMessage =
+                    L"Failed while preparing append.";
+
                 return false;
             }
         }
 
+            if (wrapped)
+            {
+                if (!WriteText(file,
+                               L"# CODE\n",
+                               encoding))
+                {
+                    errorMessage =
+                        L"Failed while writing # CODE.";
+
+                    return false;
+                }
+            }        
+
         for (const auto& block : blocks)
         {
-            const std::wstring startLine =
-                prefix + L"START " + block.relativePath + L"\n";
-
-            const std::wstring endLine =
-                prefix + L"END " + block.relativePath + L"\n";
-
-            if (!WriteText(file, startLine, encoding))
+            if (wrapped)
             {
-                errorMessage = L"Failed while writing block header.";
-                return false;
-            }
+                const std::wstring ext =
+                    GetCodeFenceExt(block.relativePath);
 
-            if (!WriteText(file, block.content, encoding))
-            {
-                errorMessage = L"Failed while writing block body.";
-                return false;
-            }
+                const std::wstring header =
+                    L"### " +
+                    block.relativePath +
+                    L"\n";
 
-            if (block.content.empty() ||
-                (block.content.back() != L'\n' &&
-                 block.content.back() != L'\r'))
-            {
-                if (!WriteText(file, L"\n", encoding))
+                const std::wstring codeFenceStart =
+                    L"```" +
+                    ext +
+                    L"\n";
+
+                if (!WriteText(file, header, encoding))
                 {
-                    errorMessage = L"Failed while writing newline.";
+                    errorMessage =
+                        L"Failed while writing block header.";
+
+                    return false;
+                }
+
+                if (!WriteText(file,
+                               codeFenceStart,
+                               encoding))
+                {
+                    errorMessage =
+                        L"Failed while writing code fence.";
+
+                    return false;
+                }
+
+                if (!WriteText(file,
+                               block.content,
+                               encoding))
+                {
+                    errorMessage =
+                        L"Failed while writing block body.";
+
+                    return false;
+                }
+
+                if (block.content.empty() ||
+                    (block.content.back() != L'\n' &&
+                     block.content.back() != L'\r'))
+                {
+                    if (!WriteText(file,
+                                   L"\n",
+                                   encoding))
+                    {
+                        errorMessage =
+                            L"Failed while writing newline.";
+
+                        return false;
+                    }
+                }
+
+                if (!WriteText(file,
+                               L"```\n",
+                               encoding))
+                {
+                    errorMessage =
+                        L"Failed while writing block footer.";
+
                     return false;
                 }
             }
-
-            if (!WriteText(file, endLine, encoding))
+            else
             {
-                errorMessage = L"Failed while writing block footer.";
-                return false;
+                if (!WriteText(file,
+                               block.content,
+                               encoding))
+                {
+                    errorMessage =
+                        L"Failed while writing block body.";
+
+                    return false;
+                }
+
+                if (block.content.empty() ||
+                    (block.content.back() != L'\n' &&
+                     block.content.back() != L'\r'))
+                {
+                    if (!WriteText(file,
+                                   L"\n",
+                                   encoding))
+                    {
+                        errorMessage =
+                            L"Failed while writing newline.";
+
+                        return false;
+                    }
+                }
             }
         }
 
         if (!file)
         {
-            errorMessage = L"Failed while writing target file.";
+            errorMessage =
+                L"Failed while writing target file.";
+
             return false;
         }
 

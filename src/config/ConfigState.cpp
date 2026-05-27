@@ -42,7 +42,6 @@ namespace cgt::config::detail
         s.extColors = kDefaultExtColors;
         s.templates.clear();
         s.outputFilePath = s.workspaceDir / std::wstring(kDefaultOutputFileName);
-        s.filePrefix = std::wstring(kDefaultFilePrefix);
     }
 
     fs::path MakeConfigPath(const fs::path& workspaceDir)

@@ -18,7 +18,6 @@ namespace cgt::config
     struct CgtTemplate
     {
         std::wstring output = L"cgt-result.txt";
-        std::wstring filePrefix = L"**";
         std::vector<std::wstring> filters;
     };
 
@@ -30,9 +29,6 @@ namespace cgt::config
 
     fs::path GetOutputFilePath();
     int SetOutputFilePath(fs::path p);
-
-    std::wstring GetFilePrefix();
-    int SetFilePrefix(std::wstring prefix);
 
     bool HasTemplate(std::wstring templateName);
     std::vector<std::wstring> GetTemplateNames();

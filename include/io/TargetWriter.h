@@ -18,7 +18,7 @@ namespace cgt::io
     {
     public:
         bool Write(const fs::path& targetPath,
-                   const std::wstring& prefix,
+                   bool wrapped,
                    bool replace,
                    const std::vector<GatheredBlock>& blocks,
                    std::wstring& errorMessage) const;

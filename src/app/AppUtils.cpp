@@ -87,13 +87,6 @@ namespace cgt::app
             state.outputToken = outputToken;
             cgt::config::SetOutputFilePath(fs::path(outputToken));
         }
-
-        const std::wstring filePrefix = args.GetFirstConfigValue(L"fileprefix", L"");
-        if (!filePrefix.empty())
-        {
-            state.filePrefix = filePrefix;
-            cgt::config::SetFilePrefix(filePrefix);
-        }
     }
 
     void ApplyFirstExistingTemplate(const cgt::cli::ParsedArgs& args, RuntimeState& state)
@@ -118,7 +111,6 @@ namespace cgt::app
                 chosenTemplate = name;
                 const cgt::config::CgtTemplate tl = cgt::config::GetTemplate(name);
                 state.outputToken = tl.output;
-                state.filePrefix = tl.filePrefix;
                 state.filters = tl.filters;
             }
         }
