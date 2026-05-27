@@ -3,6 +3,7 @@
 #include "cli/ArgParser.h"
 #include "cli/ParsedArgs.h"
 #include "config/Config.h"
+#include "filter/Filter.h"
 #include "io/FileReader.h"
 #include "io/TargetWriter.h"
 #include "log/ConsolePrompt.h"
@@ -14,14 +15,12 @@
 #include "util/TextFilePolicy.h"
 
 #include <algorithm>
-#include <cmath>
 #include <cwctype>
 #include <filesystem>
 #include <iostream>
 #include <set>
 #include <stdexcept>
 #include <string>
-#include <unordered_set>
 #include <windows.h>
 
 namespace cgt::app
@@ -34,8 +33,7 @@ namespace cgt::app
         {
             std::wstring outputToken;
             std::wstring filePrefix;
-            std::vector<std::wstring> extFilters;
-            std::vector<std::wstring> dirFilters;
+            std::vector<std::wstring> filters;
         };
 
         static fs::path GetCallerDir()
@@ -49,68 +47,16 @@ namespace cgt::app
             return fs::path(buffer, buffer + len);
         }
 
-        static std::wstring NormalizeExtKey(const std::wstring& ext)
-        {
-            return cgt::util::ToLower(cgt::util::Trim(cgt::util::StripQuotes(ext)));
-        }
-
-        static std::wstring NormalizeDirKey(const std::wstring& dir)
-        {
-            return cgt::util::NormalizeForCompare(fs::path(cgt::util::StripQuotes(cgt::util::Trim(dir))));
-        }
-
-        static void AppendUniqueExt(std::vector<std::wstring>& dst, const std::wstring& ext)
-        {
-            const std::wstring value = cgt::util::StripQuotes(cgt::util::Trim(ext));
-            const std::wstring key = NormalizeExtKey(value);
-
-            if (key.empty())
-            {
-                return;
-            }
-
-            for (const auto& item : dst)
-            {
-                if (NormalizeExtKey(item) == key)
-                {
-                    return;
-                }
-            }
-
-            dst.push_back(value);
-        }
-
-        static void AppendUniqueDir(std::vector<std::wstring>& dst, const std::wstring& dir)
-        {
-            const std::wstring value = cgt::util::StripQuotes(cgt::util::Trim(dir));
-            const std::wstring key = NormalizeDirKey(value);
-
-            if (key.empty())
-            {
-                return;
-            }
-
-            for (const auto& item : dst)
-            {
-                if (NormalizeDirKey(item) == key)
-                {
-                    return;
-                }
-            }
-
-            dst.push_back(value);
-        }
-
         static void MergeCliFilters(const cgt::cli::ParsedArgs& args, RuntimeState& state)
         {
             for (const auto& ext : args.GetExtFilters())
             {
-                AppendUniqueExt(state.extFilters, ext);
+                state.filters.push_back(ext);
             }
 
             for (const auto& dir : args.GetDirFilters())
             {
-                AppendUniqueDir(state.dirFilters, dir);
+                state.filters.push_back(dir);
             }
         }
 
@@ -154,8 +100,7 @@ namespace cgt::app
                     const cgt::config::CgtTemplate tl = cgt::config::GetTemplate(name);
                     state.outputToken = tl.output;
                     state.filePrefix = tl.filePrefix;
-                    state.extFilters = tl.extFilters;
-                    state.dirFilters = tl.dirFilters;
+                    state.filters = tl.filters;
                 }
             }
 
@@ -234,7 +179,6 @@ namespace cgt::app
         static std::vector<io::GatheredBlock> BuildBlocks(const fs::path& root,
                                                           const std::vector<scan::DiscoveredFile>& discovered,
                                                           const std::vector<std::size_t>& selectionIds,
-                                                          const std::vector<fs::path>& directPaths,
                                                           bool& hadAnyReadAttempt)
         {
             std::vector<io::GatheredBlock> blocks;
@@ -289,11 +233,6 @@ namespace cgt::app
                 addPath(discovered[idx - 1].absolutePath);
             }
 
-            for (const auto& direct : directPaths)
-            {
-                addPath(direct);
-            }
-
             return blocks;
         }
 
@@ -313,6 +252,20 @@ namespace cgt::app
             for (const auto& token : args.unknownTokens)
             {
                 cgt::log::Logger::Warning(L"ArgParser", L"Unknown token ignored: " + token);
+            }
+        }
+
+        static void SyncGlobalFilters(const std::vector<std::wstring>& filters)
+        {
+            const auto existingFilters = cgt::filter::GetFilters();
+            for (const auto& rule : existingFilters)
+            {
+                cgt::filter::RemoveFilter(rule);
+            }
+
+            for (const auto& rule : filters)
+            {
+                cgt::filter::AddFilter(rule);
             }
         }
 
@@ -341,8 +294,7 @@ namespace cgt::app
             cgt::config::CgtTemplate tl;
             tl.output = state.outputToken;
             tl.filePrefix = state.filePrefix;
-            tl.extFilters = state.extFilters;
-            tl.dirFilters = state.dirFilters;
+            tl.filters = state.filters;
 
             cgt::config::SetTemplate(names.front(), tl);
             cgt::config::Write();
@@ -390,79 +342,55 @@ namespace cgt::app
 
             cgt::config::Write();
 
+            SyncGlobalFilters(state.filters);
+
             const bool replace = args.HasFlag(L"replace");
 
             const fs::path outputPath = ResolveTarget(rootDir, state.outputToken);
             const std::wstring filePrefix = state.filePrefix;
-            const std::vector<std::wstring> extFilters = state.extFilters;
-            const std::vector<std::wstring> dirFilters = state.dirFilters;
 
-            std::vector<fs::path> directPaths;
-            for (const auto& token : dirFilters)
+            scan::DiscoveryScanner scanner(rootDir);
+            std::vector<scan::DiscoveredFile> discovered = scanner.Scan();
+
+            if (args.sourceArgs.empty() && discovered.empty())
             {
-                const fs::path resolved = cgt::util::ResolveFromRoot(rootDir, fs::path(token));
-                fs::path normalPath = resolved.lexically_normal();
-
-                if (fs::exists(normalPath) && !fs::is_directory(normalPath))
-                {
-                    directPaths.push_back(normalPath);
-                }
+                cgt::log::Logger::Warning(L"Discovery", L"No readable text files were found.");
+                return 0;
             }
 
-            const bool onlyDirectPaths = !directPaths.empty() && extFilters.empty() && (dirFilters.size() == directPaths.size());
-            std::vector<scan::DiscoveredFile> discovered;
+            cgt::log::PrintTree::PrintFoundFilesTree(discovered, rootDir);
 
-            if (!onlyDirectPaths)
+            if (discovered.empty())
             {
-                scan::DiscoveryScanner scanner(rootDir, extFilters, dirFilters);
-                discovered = scanner.Scan();
-
-                if (args.sourceArgs.empty() && discovered.empty())
-                {
-                    cgt::log::Logger::Warning(L"Discovery", L"No readable text files were found.");
-                    return 0;
-                }
-
-                cgt::log::PrintTree::PrintFoundFilesTree(discovered, rootDir);
-
-                if (discovered.empty() && directPaths.empty())
-                {
-                    cgt::log::Logger::Warning(L"Discovery", L"No files matched the current filters or ignore rules.");
-                    return 0;
-                }
+                cgt::log::Logger::Warning(L"Discovery", L"No files matched the current filters or ignore rules.");
+                return 0;
             }
 
             std::vector<std::size_t> selectionIds;
-            if (!onlyDirectPaths)
+            while (true)
             {
-                if (!discovered.empty())
+                const std::wstring input = cgt::log::ConsolePrompt::AskSelection();
+                if (input.empty())
                 {
-                    while (true)
-                    {
-                        const std::wstring input = cgt::log::ConsolePrompt::AskSelection();
-                        if (input.empty())
-                        {
-                            cgt::log::Logger::Warning(L"Selection", L"No valid selection was made.");
-                            return 0;
-                        }
-
-                        bool hadAnyValid = false;
-                        selectionIds = ParseSelectionIds(input, discovered.size(), hadAnyValid);
-                        if (hadAnyValid && !selectionIds.empty())
-                        {
-                            break;
-                        }
-
-                        cgt::log::Logger::Warning(L"Selection", L"No valid selection was made.");
-                    }
+                    cgt::log::Logger::Warning(L"Selection", L"No valid selection was made.");
+                    return 0;
                 }
+
+                bool hadAnyValid = false;
+                selectionIds = ParseSelectionIds(input, discovered.size(), hadAnyValid);
+                if (hadAnyValid && !selectionIds.empty())
+                {
+                    break;
+                }
+
+                cgt::log::Logger::Warning(L"Selection", L"No valid selection was made.");
             }
 
             std::vector<io::GatheredBlock> blocks;
             bool hadAnyReadAttempt = false;
             try
             {
-                blocks = BuildBlocks(rootDir, discovered, selectionIds, directPaths, hadAnyReadAttempt);
+                blocks = BuildBlocks(rootDir, discovered, selectionIds, hadAnyReadAttempt);
             }
             catch (...)
             {

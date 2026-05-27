@@ -84,16 +84,20 @@ namespace cgt::config
         return Write();
     }
 
-    bool HasTemplate(std::wstring templateName) {
+    bool HasTemplate(std::wstring templateName)
+    {
+        templateName = detail::NormalizeTemplateName(std::move(templateName));
         auto& state = detail::State();
         return state.templates.contains(templateName);
     }
 
-    std::vector<std::wstring> GetTemplateNames() {
-
+    std::vector<std::wstring> GetTemplateNames()
+    {
         auto& state = detail::State();
         std::vector<std::wstring> names;
-        for (auto const& pair : state.templates) {
+        names.reserve(state.templates.size());
+        for (const auto& pair : state.templates)
+        {
             names.push_back(pair.first);
         }
 

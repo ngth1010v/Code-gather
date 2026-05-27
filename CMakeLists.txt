@@ -18,13 +18,15 @@ add_executable(${AppName}
     src/cli/ArgParser.cpp
 
     src/config/ConfigColor.cpp
-    src/config/ConfigIgnore.cpp
-    src/config/ConfigIgnoreHelpers.cpp
     src/config/ConfigParser.cpp
     src/config/ConfigParserHelpers.cpp
     src/config/ConfigPublic.cpp
     src/config/ConfigState.cpp
     src/config/ConfigWriter.cpp
+
+    src/filter/Filter.cpp
+    src/filter/FilterMatcher.cpp
+    src/filter/FilterUtils.cpp
 
     src/io/FileReader.cpp
     src/io/TargetWriter.cpp

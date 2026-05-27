@@ -5,8 +5,8 @@
 #include <locale>
 #include <random>
 
-#include "config/ConfigIgnoreHelpers.h"
 #include "config/Defaults.h"
+#include "filter/Filter.h"
 #include "log/Logger.h"
 
 namespace cgt::config::detail
@@ -21,12 +21,22 @@ namespace cgt::config::detail
     {
         auto& s = State();
         s.parsed = false;
-        s.ignoreRules = kDefaultIgnoreRules;
-        s.ruleComponentList.clear();
 
-        for (const auto& rule : s.ignoreRules)
+        const auto existingFilters = cgt::filter::GetFilters();
+        for (const auto& rule : existingFilters)
         {
-            s.ruleComponentList.push_back(ComponentSpliter(ToLower(rule)));
+            cgt::filter::RemoveFilter(rule);
+        }
+
+        const auto existingIgnores = cgt::filter::GetIgnores();
+        for (const auto& rule : existingIgnores)
+        {
+            cgt::filter::RemoveIgnore(rule);
+        }
+
+        for (const auto& rule : kDefaultIgnoreRules)
+        {
+            cgt::filter::AddIgnore(rule);
         }
 
         s.extColors = kDefaultExtColors;
@@ -69,7 +79,10 @@ namespace cgt::config::detail
     std::wstring Trim(const std::wstring& s)
     {
         const auto start = s.find_first_not_of(L" \t\r\n");
-        if (start == std::wstring::npos) return L"";
+        if (start == std::wstring::npos)
+        {
+            return L"";
+        }
         const auto end = s.find_last_not_of(L" \t\r\n");
         return s.substr(start, end - start + 1);
     }
@@ -104,9 +117,16 @@ namespace cgt::config::detail
         auto& s = State();
         std::error_code ec;
         fs::path abs = fs::absolute(p, ec);
-        if (ec) abs = p;
+        if (ec)
+        {
+            abs = p;
+        }
+
         fs::path rel = fs::relative(abs, s.workspaceDir, ec);
-        if (ec) rel = abs.filename();
+        if (ec)
+        {
+            rel = abs.filename();
+        }
         return ToLower(PathToWide(rel));
     }
 

@@ -17,17 +17,14 @@ namespace cgt::config
 
     struct CgtTemplate
     {
-        std::wstring         output     = L"cgt-result.txt";
-        std::wstring         filePrefix = L"**";
-        std::vector<std::wstring> extFilters;
-        std::vector<std::wstring> dirFilters;
+        std::wstring output = L"cgt-result.txt";
+        std::wstring filePrefix = L"**";
+        std::vector<std::wstring> filters;
     };
 
     int Init(fs::path workspaceDir);
     int Parse();
     int Write();
-
-    bool IsIgnored(fs::path p);
 
     RGB GetExtColor(std::wstring ext);
 
@@ -38,7 +35,7 @@ namespace cgt::config
     int SetFilePrefix(std::wstring prefix);
 
     bool HasTemplate(std::wstring templateName);
-    std::vector<std::wstring> GetTemplateNames ();
+    std::vector<std::wstring> GetTemplateNames();
     int SetTemplate(std::wstring templateName, CgtTemplate tl);
     int RemoveTemplate(std::wstring templateName);
     CgtTemplate GetTemplate(std::wstring templateName);

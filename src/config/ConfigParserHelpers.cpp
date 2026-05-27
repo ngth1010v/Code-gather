@@ -3,6 +3,7 @@
 #include <sstream>
 
 #include "config/ConfigState.h"
+#include "filter/FilterUtils.h"
 
 namespace cgt::config::detail
 {
@@ -15,7 +16,11 @@ namespace cgt::config::detail
 
         for (int i = 0; i < 3; ++i)
         {
-            if (!std::getline(ss, part, L',')) return {};
+            if (!std::getline(ss, part, L','))
+            {
+                return {};
+            }
+
             part = Trim(part);
             try
             {
@@ -25,8 +30,15 @@ namespace cgt::config::detail
             {
                 return {};
             }
-            if (nums[i] < 0) nums[i] = 0;
-            if (nums[i] > 255) nums[i] = 255;
+
+            if (nums[i] < 0)
+            {
+                nums[i] = 0;
+            }
+            if (nums[i] > 255)
+            {
+                nums[i] = 255;
+            }
         }
 
         ok = true;
@@ -114,28 +126,6 @@ namespace cgt::config::detail
         return 0;
     }
 
-    static std::wstring NormalizeDirFilter(std::wstring value)
-    {
-        value = Trim(value);
-        for (auto& ch : value)
-        {
-            if (ch == L'\\') ch = L'/';
-        }
-        value = ToLower(value);
-
-        while (!value.empty() && value.front() == L'/')
-        {
-            value.erase(value.begin());
-        }
-
-        while (!value.empty() && value.back() == L'/')
-        {
-            value.pop_back();
-        }
-
-        return value;
-    }
-
     int HandleTemplateLine(const std::wstring& templateName, const std::wstring& line)
     {
         auto pos = line.find(L'=');
@@ -157,27 +147,26 @@ namespace cgt::config::detail
         {
             tl.filePrefix = value;
         }
-        else if (key == L"extfilters")
+        else if (key == L"filters")
         {
-            tl.extFilters.clear();
+            tl.filters.clear();
             for (auto item : ParseListLine(value))
             {
-                item = NormalizeExt(item);
+                item = cgt::filter::detail::NormalizeRule(std::move(item));
                 if (!item.empty())
                 {
-                    tl.extFilters.push_back(std::move(item));
+                    tl.filters.push_back(std::move(item));
                 }
             }
         }
-        else if (key == L"dirfilters")
+        else if (key == L"extfilters" || key == L"dirfilters")
         {
-            tl.dirFilters.clear();
             for (auto item : ParseListLine(value))
             {
-                item = NormalizeDirFilter(std::move(item));
+                item = cgt::filter::detail::NormalizeRule(std::move(item));
                 if (!item.empty())
                 {
-                    tl.dirFilters.push_back(std::move(item));
+                    tl.filters.push_back(std::move(item));
                 }
             }
         }

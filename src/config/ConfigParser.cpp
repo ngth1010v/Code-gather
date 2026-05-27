@@ -1,10 +1,10 @@
 #include "config/ConfigState.h"
 #include "config/ConfigParserHelpers.h"
-#include "config/ConfigIgnoreHelpers.h"
 
 #include <fstream>
 
 #include "config/Defaults.h"
+#include "filter/Filter.h"
 
 namespace cgt::config
 {
@@ -92,16 +92,7 @@ namespace cgt::config
             }
             else if (section == detail::Section::Ignore)
             {
-                std::wstring rule = detail::ToLower(line);
-                bool dup = false;
-                for (std::wstring oldRule : state.ignoreRules)
-                    if (rule == oldRule) {
-                        dup = true;
-                        break;
-                    }
-                if (dup) continue;
-                state.ignoreRules.push_back(rule);
-                state.ruleComponentList.push_back(detail::ComponentSpliter(rule));
+                cgt::filter::AddIgnore(line);
             }
             else if (section == detail::Section::Color)
             {

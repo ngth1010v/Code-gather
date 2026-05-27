@@ -3,6 +3,7 @@
 #include <fstream>
 
 #include "config/Defaults.h"
+#include "filter/Filter.h"
 
 namespace cgt::config
 {
@@ -41,7 +42,7 @@ namespace cgt::config
         fout << "filePrefix=" << detail::ToNarrow(state.filePrefix) << "\n\n";
 
         fout << "[IGNORE]\n";
-        for (const auto& rule : state.ignoreRules)
+        for (const auto& rule : cgt::filter::GetIgnores())
         {
             fout << detail::ToNarrow(rule) << "\n";
         }
@@ -69,14 +70,8 @@ namespace cgt::config
                 fout << "[TEMPLATE:" << detail::ToNarrow(name) << "]\n";
                 fout << "output=" << detail::ToNarrow(detail::PathToWide(tl.output)) << "\n";
                 fout << "filePrefix=" << detail::ToNarrow(tl.filePrefix) << "\n";
-                fout << "extFilters="
-                    << detail::ToNarrow(JoinList(tl.extFilters))
-                    << "\n";
-
-                fout << "dirFilters="
-                    << detail::ToNarrow(JoinList(tl.dirFilters))
-                    << "\n";
-                            }
+                fout << "filters=" << detail::ToNarrow(JoinList(tl.filters)) << "\n";
+            }
         }
 
         return kStatusOk;
