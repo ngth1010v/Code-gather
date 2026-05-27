@@ -14,6 +14,9 @@ add_executable(${AppName}
     src/main.cpp
 
     src/app/AppRunner.cpp
+    src/app/AppUtils.cpp
+    src/app/CoreRunner.cpp
+    src/app/TemplateRunner.cpp
 
     src/cli/ArgParser.cpp
 

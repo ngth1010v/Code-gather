@@ -1,5 +1,6 @@
 #include "cli/ArgParser.h"
 
+#include "app/AppUtils.h"
 #include "util/StringUtil.h"
 
 namespace cgt::cli
@@ -14,6 +15,31 @@ namespace cgt::cli
         static bool IsHelpToken(const std::wstring& token)
         {
             return util::ToLower(NormalizeToken(token)) == L"--help";
+        }
+
+        static void AddCoreFilterTokens(ParsedArgs& parsed, const std::wstring& token)
+        {
+            const std::wstring normalized = cgt::app::NormalizeCliFilterRule(token);
+            if (normalized.empty())
+            {
+                return;
+            }
+
+            parsed.filters.push_back(normalized);
+
+            if (token.rfind(L"./", 0) == 0 || token.rfind(L".\\", 0) == 0 || token[0] == L'/' || token[0] == L'\\')
+            {
+                parsed.dirFilters.push_back(token);
+                return;
+            }
+
+            if (token[0] == L'.')
+            {
+                parsed.extFilters.push_back(token);
+                return;
+            }
+
+            parsed.dirFilters.push_back(token);
         }
 
         static void ParseCoreToken(ParsedArgs& parsed, const std::wstring& rawToken)
@@ -64,13 +90,7 @@ namespace cgt::cli
                 return;
             }
 
-            if (token[0] == L'.')
-            {
-                parsed.extFilters.push_back(token);
-                return;
-            }
-
-            parsed.dirFilters.push_back(token);
+            AddCoreFilterTokens(parsed, token);
         }
 
         static void ParseSetTemplateToken(ParsedArgs& parsed, const std::wstring& rawToken)
@@ -108,6 +128,15 @@ namespace cgt::cli
             }
 
             parsed.sourceArgs.push_back(token);
+
+            if (token[0] == L'.' || token[0] == L'/' || token[0] == L'\\' || token[0] == L'*')
+            {
+                const std::wstring normalized = cgt::app::NormalizeCliFilterRule(token);
+                if (!normalized.empty())
+                {
+                    parsed.filters.push_back(normalized);
+                }
+            }
 
             if (token[0] == L'.')
             {

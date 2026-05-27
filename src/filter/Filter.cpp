@@ -5,6 +5,7 @@
 
 #include "filter/FilterMatcher.h"
 #include "filter/FilterUtils.h"
+#include "log/Logger.h"
 
 namespace cgt::filter
 {
@@ -31,6 +32,7 @@ namespace cgt::filter
             }
 
             rules[rule] = detail::ComponentSpliter(rule);
+
             return true;
         }
 
@@ -110,19 +112,34 @@ namespace cgt::filter
 
         for (const auto& [_, ruleComponents] : state.ignores)
         {
-            if (detail::MatchRule(srcComponents, ruleComponents))
+            if (detail::MatchRule(srcComponents, ruleComponents, true))
             {
                 return false;
             }
-        }
+        }        
 
-        for (const auto& [_, ruleComponents] : state.filters)
+        if (!state.filters.empty())
         {
-            if (!detail::MatchRule(srcComponents, ruleComponents))
+            bool passedAnyFilter = false;
+            for (const auto& [_, ruleComponents] : state.filters)
+            {
+                // Truyền ignore = false
+                if (detail::MatchRule(srcComponents, ruleComponents, false))
+                {
+                    passedAnyFilter = true;
+                    break;
+                }
+            }
+            
+            // Nếu không match bất kỳ filter nào -> loại
+            if (!passedAnyFilter)
             {
                 return false;
             }
-        }
+        }       
+
+
+
 
         return true;
     }

@@ -20,6 +20,7 @@ namespace cgt::cli
         Mode mode = Mode::Core;
 
         std::vector<std::wstring> sourceArgs;
+        std::vector<std::wstring> filters;
         std::vector<std::wstring> extFilters;
         std::vector<std::wstring> dirFilters;
         std::vector<std::wstring> templateNames;
@@ -37,6 +38,7 @@ namespace cgt::cli
         std::wstring GetFirstConfigValue(const std::wstring& key, const std::wstring& defaultValue = L"") const;
         std::vector<std::wstring> GetConfigValues(const std::wstring& key) const;
 
+        const std::vector<std::wstring>& GetFilters() const { return filters; }
         const std::vector<std::wstring>& GetExtFilters() const { return extFilters; }
         const std::vector<std::wstring>& GetDirFilters() const { return dirFilters; }
         const std::vector<std::wstring>& GetOrderedFlags() const { return orderedFlags; }

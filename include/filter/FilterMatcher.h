@@ -6,5 +6,6 @@
 namespace cgt::filter::detail
 {
     bool MatchRule(const std::vector<std::wstring>& srcComponents,
-                   const std::vector<std::wstring>& ruleComponents);
+                   const std::vector<std::wstring>& ruleComponents,
+                   const bool ignore);
 }
