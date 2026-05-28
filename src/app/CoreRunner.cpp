@@ -1,12 +1,14 @@
 #include "app/CoreRunner.h"
 
 #include "app/AppUtils.h"
+#include "app/coreRunner/CoreConfirmer.h"
+#include "app/coreRunner/CoreSelector.h"
+#include "app/coreRunner/CoreUtils.h"
 #include "cli/ParsedArgs.h"
 #include "config/Config.h"
 #include "io/TargetWriter.h"
 #include "log/ConsolePrompt.h"
 #include "log/Logger.h"
-#include "log/PrintTree.h"
 #include "scan/DiscoveryScanner.h"
 #include "util/PathUtil.h"
 
@@ -15,6 +17,15 @@
 
 namespace cgt::app
 {
+    namespace
+    {
+        void PrintNoChangesAndClear()
+        {
+            cgt::app::coreRunner::ClearScreen();
+            cgt::log::Logger::Plain(L"CoreGather: No changes were made.");
+        }
+    }
+
     int CoreRunner::Run(const cgt::cli::ParsedArgs& args, const fs::path& rootDir)
     {
         WarnUnknownTokens(args);
@@ -32,60 +43,57 @@ namespace cgt::app
         const bool replace = args.HasFlag(L"replace") || args.HasFlag(L"r");
         const bool wrapped = !(args.HasFlag(L"nowrapped") || args.HasFlag(L"nw"));
 
-        const fs::path outputPath = ResolveTarget(rootDir, state.outputToken);
-
         scan::DiscoveryScanner scanner(rootDir);
         std::vector<scan::DiscoveredFile> discovered = scanner.Scan();
 
         if (args.sourceArgs.empty() && discovered.empty())
         {
-            cgt::log::Logger::Warning(L"Discovery", L"No readable text files were found.");
+            PrintNoChangesAndClear();
             return 0;
         }
 
-        cgt::log::PrintTree::PrintFoundFilesTree(discovered, rootDir);
-
-        if (discovered.empty())
+        cgt::app::coreRunner::CoreSelector selector;
+        const std::vector<std::size_t> selectedIds = selector.Run(discovered, rootDir);
+        if (selectedIds.empty())
         {
-            cgt::log::Logger::Warning(L"Discovery", L"No files matched the current filters or ignore rules.");
+            PrintNoChangesAndClear();
             return 0;
         }
 
-        std::vector<std::size_t> selectionIds;
-        while (true)
+        cgt::app::coreRunner::CoreConfirmer confirmer;
+        const cgt::app::coreRunner::CoreConfirmResult confirm = confirmer.Run(discovered,
+                                                                              selectedIds,
+                                                                              rootDir,
+                                                                              state.outputToken,
+                                                                              replace,
+                                                                              wrapped);
+        if (confirm.cancelled)
         {
-            const std::wstring input = cgt::log::ConsolePrompt::AskSelection();
-            if (input.empty())
-            {
-                cgt::log::Logger::Warning(L"Selection", L"No valid selection was made.");
-                return 0;
-            }
-
-            bool hadAnyValid = false;
-            selectionIds = ParseSelectionIds(input, discovered.size(), hadAnyValid);
-            if (hadAnyValid && !selectionIds.empty())
-            {
-                break;
-            }
-
-            cgt::log::Logger::Warning(L"Selection", L"No valid selection was made.");
+            PrintNoChangesAndClear();
+            return 0;
         }
+
+        const fs::path outputPath = ResolveTarget(rootDir, confirm.outputToken);
+        cgt::app::coreRunner::ClearScreen();
+        cgt::log::Logger::Plain(L"Merging from " + std::to_wstring(selectedIds.size()) + L" files into file [" + cgt::util::RelativeDisplayPath(rootDir, outputPath) + L"]...");
 
         std::vector<io::GatheredBlock> blocks;
         bool hadAnyReadAttempt = false;
         try
         {
-            blocks = BuildBlocks(rootDir, discovered, selectionIds, hadAnyReadAttempt);
+            blocks = BuildBlocks(rootDir, discovered, selectedIds, hadAnyReadAttempt);
         }
         catch (...)
         {
-            cgt::log::Logger::Warning(L"FileReader", L"Run cancelled by user.");
+            cgt::app::coreRunner::ClearScreen();
+            cgt::log::Logger::Plain(L"CoreGather: No changes were made.");
             return 0;
         }
 
         if (blocks.empty())
         {
-            cgt::log::Logger::Warning(L"Gather", L"No file matched the current filters / ignores / source constraints.");
+            cgt::app::coreRunner::ClearScreen();
+            cgt::log::Logger::Plain(L"CoreGather: No changes were made.");
             return 0;
         }
 
@@ -93,9 +101,9 @@ namespace cgt::app
         std::wstring errorMessage;
         while (true)
         {
-            if (writer.Write(outputPath, wrapped, replace, blocks, errorMessage))
+            if (writer.Write(outputPath, confirm.wrapped, confirm.replace, blocks, errorMessage))
             {
-                cgt::log::Logger::Info(L"TargetWriter", L"Wrote output to " + cgt::util::RelativeDisplayPath(rootDir, outputPath));
+                cgt::log::Logger::Plain(L"Successfully merged from " + std::to_wstring(selectedIds.size()) + L" files into file [" + cgt::util::RelativeDisplayPath(rootDir, outputPath) + L"].");
                 return 0;
             }
 

@@ -9,3 +9,4 @@ cgt-result.txt
 _templates/
 _prompts/
 **test.md
+**test[0-9].md
