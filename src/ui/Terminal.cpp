@@ -186,15 +186,32 @@ namespace cgt::ui::teminal
         return true;
     }
 
-    bool IsMouseDown(CursorPos& pos)
+    bool IsMouseDown(CursorPos& pos, std::vector<MouseKey>& key)
     {
         auto& s = State();
         if (s.mouse_events.empty())
         {
             return false;
         }
-        pos = s.mouse_events.front();
+        
+        // Match the structural change made in state tracking
+        pos = s.mouse_events.front().pos;
+        key = std::move(s.mouse_events.front().keys);
+        
         s.mouse_events.pop_front();
+        return true;
+    }
+
+    bool IsMouseScroll(int& delta)
+    {
+        auto& s = State();
+        if (s.pending_scroll_delta == 0)
+        {
+            return false;
+        }
+        
+        delta = s.pending_scroll_delta;
+        s.pending_scroll_delta = 0; // Clear immediately so it resets for next frame loop
         return true;
     }
 

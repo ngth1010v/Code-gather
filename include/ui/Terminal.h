@@ -23,6 +23,14 @@ namespace cgt::ui::teminal
         int y{0};
     };
 
+    enum class MouseKey : std::uint8_t
+    {
+        Unknown = 0,
+        Left,
+        Right,
+        Middle
+    };
+
     enum class CmdKey : std::uint8_t
     {
         Unknown = 0,
@@ -73,7 +81,10 @@ namespace cgt::ui::teminal
     int Flush();
 
     bool IsResize(WindowSize& size);
-    bool IsMouseDown(CursorPos& pos);
+
+    bool IsMouseDown(CursorPos& pos, std::vector<MouseKey>& key);
+    bool IsMouseScroll(int& delta);
+    
     bool IsKeyDown(std::vector<wchar>& key);
     bool IsCmdKeyDown(std::vector<CmdKey>& key);
 }

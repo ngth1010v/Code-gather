@@ -26,10 +26,17 @@ namespace cgt::ui::teminal
 
         std::string out;
 
+        struct MouseAction {
+            CursorPos pos;
+            std::vector<MouseKey> keys;
+        };
+        std::deque<MouseAction> mouse_events;
+        int pending_scroll_delta{0};
+
         std::deque<WindowSize> resize_events;
-        std::deque<CursorPos> mouse_events;
         std::deque<std::vector<wchar>> key_events;
         std::deque<std::vector<CmdKey>> cmd_events;
+
 
         std::string pending_utf8;
         bool esc_pending{false};

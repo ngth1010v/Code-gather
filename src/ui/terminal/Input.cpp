@@ -31,9 +31,14 @@ namespace cgt::ui::teminal
             }
         }
 
-        void PushMouse(const CursorPos& pos)
+        void PushMouse(const CursorPos& pos, const std::vector<MouseKey>& keys)
         {
-            State().mouse_events.push_back(pos);
+            State().mouse_events.push_back({pos, keys});
+        }
+
+        void PushScroll(int delta)
+        {
+            State().pending_scroll_delta += delta;
         }
 
         void PushKey(const std::vector<wchar>& key)
@@ -223,6 +228,49 @@ namespace cgt::ui::teminal
                 if (seq == "\x1bOS") { EmitCmd(CmdKey::F4); return; }
             }
 
+            if (seq.rfind("\x1b[<", 0) == 0)
+            {
+                const char* p = seq.c_str() + 3;
+                char* end = nullptr;
+                const long btn = std::strtol(p, &end, 10);
+                if (end && *end == ';')
+                {
+                    const long x = std::strtol(end + 1, &end, 10);
+                    if (end && *end == ';')
+                    {
+                        const long y = std::strtol(end + 1, &end, 10);
+                        if (end && (*end == 'M' || *end == 'm'))
+                        {
+                            // Scroll UP (SGR code 64) or Scroll DOWN (SGR code 65)
+                            if (btn == 64)
+                            {
+                                PushScroll(1); // 1 unit up
+                                return;
+                            }
+                            else if (btn == 65)
+                            {
+                                PushScroll(-1); // 1 unit down
+                                return;
+                            }
+
+                            // Regular Button Presses (Only look at 'M' for down events)
+                            if (*end == 'M')
+                            {
+                                std::vector<MouseKey> mouse_keys;
+                                // Clear low bits representing modifiers to find base button
+                                long base_btn = btn & 0x03; 
+                                if (base_btn == 0) mouse_keys.push_back(MouseKey::Left);
+                                else if (base_btn == 1) mouse_keys.push_back(MouseKey::Middle);
+                                else if (base_btn == 2) mouse_keys.push_back(MouseKey::Right);
+                                
+                                PushMouse(CursorPos{static_cast<int>(x - 1), static_cast<int>(y - 1)}, mouse_keys);
+                            }
+                            return;
+                        }
+                    }
+                }
+            }
+
             EmitCmd(CmdKey::Escape);
         }
 #endif
@@ -312,11 +360,32 @@ namespace cgt::ui::teminal
             else if (rec.EventType == MOUSE_EVENT)
             {
                 const MOUSE_EVENT_RECORD& m = rec.Event.MouseEvent;
-                const bool pressed = (m.dwEventFlags == 0) && (m.dwButtonState != 0);
-                if (pressed)
+                
+                // Handle Scroll Wheels
+                if (m.dwEventFlags & MOUSE_WHEELED)
                 {
-                    PushMouse(CursorPos{static_cast<int>(m.dwMousePosition.X), static_cast<int>(m.dwMousePosition.Y)});
-                    ++count;
+                    // High word contains a signed delta value (multiples of WHEEL_DELTA = 120)
+                    short wheel_delta = static_cast<short>(HIWORD(m.dwButtonState));
+                    int ticks = wheel_delta / 120;
+                    if (ticks != 0)
+                    {
+                        PushScroll(ticks);
+                        ++count;
+                    }
+                }
+                // Handle clicks (EventFlags == 0 indicates a button state changes)
+                else if (m.dwEventFlags == 0)
+                {
+                    std::vector<MouseKey> mouse_keys;
+                    if (m.dwButtonState & FROM_LEFT_1ST_BUTTON_PRESSED)  mouse_keys.push_back(MouseKey::Left);
+                    if (m.dwButtonState & RIGHTMOST_BUTTON_PRESSED)      mouse_keys.push_back(MouseKey::Right);
+                    if (m.dwButtonState & FROM_LEFT_2ND_BUTTON_PRESSED)  mouse_keys.push_back(MouseKey::Middle);
+
+                    if (!mouse_keys.empty())
+                    {
+                        PushMouse(CursorPos{static_cast<int>(m.dwMousePosition.X), static_cast<int>(m.dwMousePosition.Y)}, mouse_keys);
+                        ++count;
+                    }
                 }
             }
             else if (rec.EventType == WINDOW_BUFFER_SIZE_EVENT)
