@@ -45,6 +45,12 @@ add_executable(${AppName}
 
     src/scan/DiscoveryScanner.cpp
 
+    src/ui/Terminal.cpp
+    src/ui/terminal/Ansi.cpp
+    src/ui/terminal/Input.cpp
+    src/ui/terminal/Platform.cpp
+    src/ui/terminal/State.cpp
+
     src/util/PathUtil.cpp
     src/util/StringUtil.cpp
     src/util/TextFilePolicy.cpp
