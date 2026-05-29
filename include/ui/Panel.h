@@ -58,6 +58,7 @@ namespace cgt::ui::panel
 
         int GetSize(PanelSize& size);
         int GetPos(PanelPos& pos);
+        int GetOffset(int& offset);
 
         int SetLine(int y, PanelLine line);
         int RemoveLine(int y);

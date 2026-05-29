@@ -244,6 +244,12 @@ namespace cgt::ui::panel
         return detail::kOk;
     }
 
+    int Panel::GetOffset(int& offset)
+    {
+        offset = m_offset;
+        return detail::kOk;
+    }
+
     int Panel::OnResize(WindowSize& size)
     {
         m_terminalSize = size;
