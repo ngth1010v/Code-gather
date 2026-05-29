@@ -1,9 +1,7 @@
 #include "app/CoreRunner.h"
 
 #include "app/AppUtils.h"
-#include "app/coreRunner/CoreConfirmer.h"
-#include "app/coreRunner/CoreSelector.h"
-#include "app/coreRunner/CoreUtils.h"
+#include "app/coreRunner/CoreSelectionUi.h"
 #include "cli/ParsedArgs.h"
 #include "config/Config.h"
 #include "io/TargetWriter.h"
@@ -12,6 +10,7 @@
 #include "scan/DiscoveryScanner.h"
 #include "util/PathUtil.h"
 
+#include <iostream>
 #include <stdexcept>
 #include <vector>
 
@@ -19,9 +18,15 @@ namespace cgt::app
 {
     namespace
     {
+        void ClearMainBuffer()
+        {
+            std::wcout << L"\x1b[2J\x1b[H";
+            std::wcout.flush();
+        }
+
         void PrintNoChangesAndClear()
         {
-            cgt::app::coreRunner::ClearScreen();
+            ClearMainBuffer();
             cgt::log::Logger::Plain(L"CoreGather: No changes were made.");
         }
     }
@@ -52,30 +57,20 @@ namespace cgt::app
             return 0;
         }
 
-        cgt::app::coreRunner::CoreSelector selector;
-        const std::vector<std::size_t> selectedIds = selector.Run(discovered, rootDir);
+        cgt::app::coreRunner::CoreSelectionUi selectionUi;
+        const std::vector<std::size_t> selectedIds = selectionUi.Run(discovered, rootDir);
         if (selectedIds.empty())
         {
             PrintNoChangesAndClear();
             return 0;
         }
 
-        cgt::app::coreRunner::CoreConfirmer confirmer;
-        const cgt::app::coreRunner::CoreConfirmResult confirm = confirmer.Run(discovered,
-                                                                              selectedIds,
-                                                                              rootDir,
-                                                                              state.outputToken,
-                                                                              replace,
-                                                                              wrapped);
-        if (confirm.cancelled)
-        {
-            PrintNoChangesAndClear();
-            return 0;
-        }
-
-        const fs::path outputPath = ResolveTarget(rootDir, confirm.outputToken);
-        cgt::app::coreRunner::ClearScreen();
-        cgt::log::Logger::Plain(L"Merging from " + std::to_wstring(selectedIds.size()) + L" files into file [" + cgt::util::RelativeDisplayPath(rootDir, outputPath) + L"]...");
+        const fs::path outputPath = ResolveTarget(rootDir, state.outputToken);
+        ClearMainBuffer();
+        cgt::log::Logger::Plain(L"Merging from " + std::to_wstring(selectedIds.size()) +
+                                L" files into file [" +
+                                cgt::util::RelativeDisplayPath(rootDir, outputPath) +
+                                L"]...");
 
         std::vector<io::GatheredBlock> blocks;
         bool hadAnyReadAttempt = false;
@@ -85,15 +80,13 @@ namespace cgt::app
         }
         catch (...)
         {
-            cgt::app::coreRunner::ClearScreen();
-            cgt::log::Logger::Plain(L"CoreGather: No changes were made.");
+            PrintNoChangesAndClear();
             return 0;
         }
 
         if (blocks.empty())
         {
-            cgt::app::coreRunner::ClearScreen();
-            cgt::log::Logger::Plain(L"CoreGather: No changes were made.");
+            PrintNoChangesAndClear();
             return 0;
         }
 
@@ -101,9 +94,14 @@ namespace cgt::app
         std::wstring errorMessage;
         while (true)
         {
-            if (writer.Write(outputPath, confirm.wrapped, confirm.replace, blocks, errorMessage))
+            if (writer.Write(outputPath, wrapped, replace, blocks, errorMessage))
             {
-                cgt::log::Logger::Plain(L"Successfully merged from " + std::to_wstring(selectedIds.size()) + L" files into file [" + cgt::util::RelativeDisplayPath(rootDir, outputPath) + L"].");
+                ClearMainBuffer();
+                cgt::log::Logger::Plain(L"Successfully merged from " +
+                                        std::to_wstring(selectedIds.size()) +
+                                        L" files into file [" +
+                                        cgt::util::RelativeDisplayPath(rootDir, outputPath) +
+                                        L"].");
                 return 0;
             }
 

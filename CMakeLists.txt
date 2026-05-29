@@ -19,9 +19,9 @@ add_executable(${AppName}
 
     src/app/CoreRunner.cpp
     src/app/coreRunner/CoreBuildTree.cpp
-    src/app/coreRunner/CoreConfirmer.cpp
-    src/app/coreRunner/CoreSelector.cpp
-    src/app/coreRunner/CoreUtils.cpp
+    src/app/coreRunner/CoreSelectionInput.cpp
+    src/app/coreRunner/CoreSelectionUi.cpp
+    src/app/coreRunner/CoreTreeRender.cpp
 
     src/cli/ArgParser.cpp
 

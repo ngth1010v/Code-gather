@@ -12,7 +12,7 @@ namespace cgt::scan
 
 namespace cgt::app::coreRunner
 {
-    class CoreSelector
+    class CoreSelectionUi
     {
     public:
         std::vector<std::size_t> Run(const std::vector<cgt::scan::DiscoveredFile>& files,
