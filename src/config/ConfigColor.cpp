@@ -1,6 +1,7 @@
 #include "config/ConfigState.h"
 
 #include "config/Defaults.h"
+#include "util/Types.h"
 
 namespace cgt::config
 {

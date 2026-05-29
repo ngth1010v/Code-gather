@@ -4,17 +4,12 @@
 #include <string>
 #include <vector>
 
+#include "util/Types.h"
+
 namespace fs = std::filesystem;
 
 namespace cgt::config
 {
-    struct RGB
-    {
-        int r;
-        int g;
-        int b;
-    };
-
     struct CgtTemplate
     {
         std::wstring output = L"cgt-result.txt";

@@ -21,7 +21,7 @@ namespace cgt::app::coreRunner
         struct TokenInfo
         {
             std::size_t start = 0;
-            std::size_t end = 0; // exclusive
+            std::size_t end = 0;
             std::size_t value = 0;
             bool valid = false;
         };
@@ -42,61 +42,48 @@ namespace cgt::app::coreRunner
             bool rootLine = false;
         };
 
-        class CursorGuard
+        class SessionGuard
         {
         public:
-            CursorGuard() = default;
-            CursorGuard(const CursorGuard&) = delete;
-            CursorGuard& operator=(const CursorGuard&) = delete;
-            ~CursorGuard()
+            explicit SessionGuard(std::size_t clearToRow)
+                : clearToRow(clearToRow)
+            {}
+
+            SessionGuard(const SessionGuard&) = delete;
+            SessionGuard& operator=(const SessionGuard&) = delete;
+
+            ~SessionGuard()
             {
+                ClearRenderedRegion(1, clearToRow);
                 std::wcout << ShowCursor();
                 std::wcout.flush();
             }
+
+        private:
+            std::size_t clearToRow = 0;
         };
 
-        bool IsSpace(wchar_t ch)
-        {
-            return std::iswspace(ch) != 0;
-        }
+        bool IsSpace(wchar_t ch) { return std::iswspace(ch) != 0; }
 
         std::vector<TokenInfo> ParseTokens(const std::wstring& buffer, std::size_t maxCount)
         {
             std::vector<TokenInfo> tokens;
-
             std::size_t i = 0;
             while (i < buffer.size())
             {
-                while (i < buffer.size() && IsSpace(buffer[i]))
-                {
-                    ++i;
-                }
-
+                while (i < buffer.size() && IsSpace(buffer[i])) ++i;
                 const std::size_t begin = i;
-                while (i < buffer.size() && !IsSpace(buffer[i]))
-                {
-                    ++i;
-                }
+                while (i < buffer.size() && !IsSpace(buffer[i])) ++i;
                 const std::size_t end = i;
-
-                if (begin >= end)
-                {
-                    continue;
-                }
+                if (begin >= end) continue;
 
                 TokenInfo token;
                 token.start = begin;
-                token.end = end;
+                token.end   = end;
 
                 bool numeric = true;
                 for (std::size_t j = begin; j < end; ++j)
-                {
-                    if (!std::iswdigit(buffer[j]))
-                    {
-                        numeric = false;
-                        break;
-                    }
-                }
+                    if (!std::iswdigit(buffer[j])) { numeric = false; break; }
 
                 if (numeric)
                 {
@@ -105,21 +92,14 @@ namespace cgt::app::coreRunner
                         token.value = static_cast<std::size_t>(std::stoull(buffer.substr(begin, end - begin)));
                         token.valid = token.value >= 1 && token.value <= maxCount;
                     }
-                    catch (...)
-                    {
-                        token.valid = false;
-                    }
+                    catch (...) { token.valid = false; }
                 }
-
                 tokens.push_back(token);
             }
-
             return tokens;
         }
 
-        ParseState ParseBuffer(const std::wstring& buffer,
-                               std::size_t cursor,
-                               std::size_t maxCount)
+        ParseState ParseBuffer(const std::wstring& buffer, std::size_t cursor, std::size_t maxCount)
         {
             ParseState state;
             const auto tokens = ParseTokens(buffer, maxCount);
@@ -137,18 +117,13 @@ namespace cgt::app::coreRunner
             std::set<std::size_t> seen;
             for (const auto& token : tokens)
             {
-                if (!token.valid)
-                {
-                    continue;
-                }
-
+                if (!token.valid) continue;
                 if (seen.insert(token.value).second)
                 {
                     state.selectedIds.push_back(token.value);
                     state.selectedSet.insert(token.value);
                 }
             }
-
             return state;
         }
 
@@ -156,19 +131,12 @@ namespace cgt::app::coreRunner
         {
             const auto tokens = ParseTokens(buffer, maxCount);
             for (auto it = tokens.rbegin(); it != tokens.rend(); ++it)
-            {
-                if (it->valid)
-                {
-                    return buffer.substr(it->start, it->end - it->start);
-                }
-            }
+                if (it->valid) return buffer.substr(it->start, it->end - it->start);
             return {};
         }
 
-        void ReplaceActiveToken(std::wstring& buffer,
-                                std::size_t& cursor,
-                                std::size_t maxCount,
-                                std::size_t newValue)
+        void ReplaceActiveToken(std::wstring& buffer, std::size_t& cursor,
+                                std::size_t maxCount, std::size_t newValue)
         {
             const auto tokens = ParseTokens(buffer, maxCount);
             for (const auto& token : tokens)
@@ -181,47 +149,61 @@ namespace cgt::app::coreRunner
                     return;
                 }
             }
-
             InsertText(buffer, cursor, std::to_wstring(newValue));
+        }
+
+        std::size_t CountNodeVisibleCells(const TreeNode& node,
+                                          const std::wstring& prefix,
+                                          std::size_t maxIndexDigits)
+        {
+            if (node.isFile)
+            {
+                const std::size_t indexDigits = std::to_wstring(node.fileIndex).size();
+                const std::size_t paddedDigits = std::max(indexDigits, maxIndexDigits);
+                return paddedDigits + 1 + prefix.size() + 4 + node.name.size();
+            }
+            return maxIndexDigits + 1 + prefix.size() + 4 + node.name.size() + 1;
+        }
+
+        std::size_t CountRootVisibleCells(const TreeNode& root, std::size_t maxIndexDigits)
+        {
+            return maxIndexDigits + 1 + root.name.size() + 1;
+        }
+
+        std::size_t CountWrappedRows(std::size_t visibleCells, std::size_t terminalWidth)
+        {
+            const std::size_t width = std::max<std::size_t>(1, terminalWidth);
+            return std::max<std::size_t>(1, (visibleCells + width - 1) / width);
         }
 
         void CollectRenderLines(const TreeNode& node,
                                 std::wstring prefix,
                                 bool isLast,
                                 std::size_t& row,
+                                std::size_t terminalWidth,
+                                std::size_t maxIndexDigits,
                                 std::vector<RenderLine>& lines)
         {
-            lines.push_back(RenderLine{ &node, std::move(prefix), isLast, row++, false });
+            lines.push_back(RenderLine{ &node, std::move(prefix), isLast, row, false });
+            row += CountWrappedRows(CountNodeVisibleCells(node, lines.back().prefix, maxIndexDigits), terminalWidth);
+
             const std::wstring nextPrefix = lines.back().prefix + (isLast ? L"    " : L"│   ");
             for (std::size_t i = 0; i < node.children.size(); ++i)
-            {
-                CollectRenderLines(node.children[i], nextPrefix, i + 1 == node.children.size(), row, lines);
-            }
+                CollectRenderLines(node.children[i], nextPrefix, i + 1 == node.children.size(),
+                                   row, terminalWidth, maxIndexDigits, lines);
         }
 
         bool HasSelectedFile(const TreeNode& node, const std::set<std::size_t>& selected)
         {
-            if (node.isFile)
-            {
-                return selected.contains(node.fileIndex);
-            }
-
+            if (node.isFile) return selected.contains(node.fileIndex);
             for (const auto& child : node.children)
-            {
-                if (HasSelectedFile(child, selected))
-                {
-                    return true;
-                }
-            }
+                if (HasSelectedFile(child, selected)) return true;
             return false;
         }
 
         bool IsDirectoryFullySelected(const TreeNode& node, const std::set<std::size_t>& selected)
         {
-            if (node.isFile)
-            {
-                return selected.contains(node.fileIndex);
-            }
+            if (node.isFile) return selected.contains(node.fileIndex);
 
             bool hasAnyFile = false;
             for (const auto& child : node.children)
@@ -229,21 +211,12 @@ namespace cgt::app::coreRunner
                 if (child.isFile)
                 {
                     hasAnyFile = true;
-                    if (!selected.contains(child.fileIndex))
-                    {
-                        return false;
-                    }
+                    if (!selected.contains(child.fileIndex)) return false;
                 }
                 else
                 {
-                    if (HasSelectedFile(child, selected))
-                    {
-                        hasAnyFile = true;
-                    }
-                    if (!IsDirectoryFullySelected(child, selected))
-                    {
-                        return false;
-                    }
+                    if (HasSelectedFile(child, selected)) hasAnyFile = true;
+                    if (!IsDirectoryFullySelected(child, selected)) return false;
                 }
             }
             return hasAnyFile;
@@ -255,48 +228,34 @@ namespace cgt::app::coreRunner
         {
             std::wstring line;
             const bool bgSelected = IsDirectoryFullySelected(root, selected);
-            if (bgSelected)
-            {
-                line += MakeAnsiBg(kSelectedBackground);
-            }
-
+            if (bgSelected) line += MakeAnsiBg(kSelectedBackground);
             line += std::wstring(maxIndexDigits, L' ');
             line += L" ";
             line += root.name;
             line += L"/";
-
-            if (bgSelected)
-            {
-                line += MakeAnsiReset();
-            }
+            if (bgSelected) line += MakeAnsiReset();
             return line;
         }
 
         std::wstring MakeNodeLine(const TreeNode& node,
-                                 const std::wstring& prefix,
-                                 bool isLast,
-                                 std::size_t maxIndexDigits,
-                                 const std::set<std::size_t>& selected,
-                                 const std::optional<std::size_t>& activeId)
+                                  const std::wstring& prefix,
+                                  bool isLast,
+                                  std::size_t maxIndexDigits,
+                                  const std::set<std::size_t>& selected,
+                                  const std::optional<std::size_t>& activeId)
         {
             const std::wstring connector = isLast ? L"└── " : L"├── ";
-            const bool selectedHere = node.isFile ? selected.contains(node.fileIndex) : IsDirectoryFullySelected(node, selected);
+            const bool selectedHere = node.isFile
+                ? selected.contains(node.fileIndex)
+                : IsDirectoryFullySelected(node, selected);
             const bool activeHere = node.isFile && activeId.has_value() && *activeId == node.fileIndex;
-            const cgt::config::RGB* bg = nullptr;
-            if (activeHere)
-            {
-                bg = &kSelectingBackground;
-            }
-            else if (selectedHere)
-            {
-                bg = &kSelectedBackground;
-            }
+
+            const cgt::RGB* bg = nullptr;
+            if (activeHere)       bg = &kSelectingBackground;
+            else if (selectedHere) bg = &kSelectedBackground;
 
             std::wstring line;
-            if (bg != nullptr)
-            {
-                line += MakeAnsiBg(*bg);
-            }
+            if (bg) line += MakeAnsiBg(*bg);
 
             if (node.isFile)
             {
@@ -304,12 +263,10 @@ namespace cgt::app::coreRunner
                 line += indexText;
                 line += L" ";
                 if (maxIndexDigits > indexText.size())
-                {
                     line.append(maxIndexDigits - indexText.size(), L' ');
-                }
                 line += prefix;
                 line += connector;
-                const cgt::config::RGB extColor = cgt::config::GetExtColor(node.absolutePath.extension().wstring());
+                const cgt::RGB extColor = cgt::config::GetExtColor(node.absolutePath.extension().wstring());
                 line += MakeAnsiFg(extColor);
                 line += node.name;
                 line += MakeAnsiReset();
@@ -324,17 +281,28 @@ namespace cgt::app::coreRunner
                 line += L"/";
             }
 
-            if (bg != nullptr)
-            {
-                line += MakeAnsiReset();
-            }
+            if (bg) line += MakeAnsiReset();
             return line;
         }
 
+        // ---------------------------------------------------------------------
+        // WriteLine  —  THE KEY CHANGE
+        //
+        // Previously:
+        //   std::wcout << MoveCursorTo(row, 1) << ClearCurrentLine() << text;
+        //
+        // MoveCursorTo emits \x1b[row;1H which is VIEWPORT-RELATIVE.
+        // When the tree needs more rows than the visible window height, rows
+        // beyond the window bottom are silently clamped to the last visible row,
+        // causing every overflow line to overwrite the same bottom line.
+        //
+        // Fix: delegate to WriteLineAbsolute() which uses Win32
+        // SetConsoleCursorPosition — absolute BUFFER coordinates, completely
+        // independent of the viewport position or height.
+        // ---------------------------------------------------------------------
         void WriteLine(std::size_t row, const std::wstring& text)
         {
-            std::wcout << MoveCursorTo(row, 1) << ClearCurrentLine() << text;
-            std::wcout.flush();
+            WriteLineAbsolute(row, text);
         }
 
         void RenderPrompt(std::size_t row, const std::wstring& buffer, std::size_t cursor)
@@ -348,28 +316,16 @@ namespace cgt::app::coreRunner
                         std::size_t maxIndexDigits)
         {
             WriteLine(3, MakeRootLine(root, maxIndexDigits, state.selectedSet));
-
             for (const auto& line : lines)
-            {
-                WriteLine(line.row, MakeNodeLine(*line.node, line.prefix, line.isLast, maxIndexDigits, state.selectedSet, state.activeId));
-            }
-        }
-
-        std::size_t CountRenderedRows(const std::vector<RenderLine>& lines)
-        {
-            std::size_t row = 4;
-            if (!lines.empty())
-            {
-                row = lines.back().row + 1;
-            }
-            return row;
+                WriteLine(line.row, MakeNodeLine(*line.node, line.prefix, line.isLast,
+                                                 maxIndexDigits, state.selectedSet, state.activeId));
         }
 
         void RenderScreen(const TreeNode& root,
                           const std::vector<RenderLine>& lines,
                           const ParseState& state,
                           const std::wstring& buffer,
-                          std::size_t cursor,
+                          const std::size_t cursor,
                           std::size_t maxIndexDigits,
                           std::size_t promptRow)
         {
@@ -378,9 +334,8 @@ namespace cgt::app::coreRunner
             WriteLine(2, L"List of detected files");
             WriteLine(3, MakeRootLine(root, maxIndexDigits, state.selectedSet));
             for (const auto& line : lines)
-            {
-                WriteLine(line.row, MakeNodeLine(*line.node, line.prefix, line.isLast, maxIndexDigits, state.selectedSet, state.activeId));
-            }
+                WriteLine(line.row, MakeNodeLine(*line.node, line.prefix, line.isLast,
+                                                 maxIndexDigits, state.selectedSet, state.activeId));
             WriteLine(promptRow - 1, MakeDividerLine());
             RenderPrompt(promptRow, buffer, cursor);
             std::wcout.flush();
@@ -397,14 +352,19 @@ namespace cgt::app::coreRunner
                 WriteLine(3, MakeRootLine(root, maxIndexDigits, next.selectedSet));
                 for (const auto& line : lines)
                 {
-                    const bool prevSelected = line.node->isFile ? prev.selectedSet.contains(line.node->fileIndex) : IsDirectoryFullySelected(*line.node, prev.selectedSet);
-                    const bool nextSelected = line.node->isFile ? next.selectedSet.contains(line.node->fileIndex) : IsDirectoryFullySelected(*line.node, next.selectedSet);
-                    const bool prevActive = line.node->isFile && prev.activeId.has_value() && *prev.activeId == line.node->fileIndex;
-                    const bool nextActive = line.node->isFile && next.activeId.has_value() && *next.activeId == line.node->fileIndex;
+                    const bool prevSelected = line.node->isFile
+                        ? prev.selectedSet.contains(line.node->fileIndex)
+                        : IsDirectoryFullySelected(*line.node, prev.selectedSet);
+                    const bool nextSelected = line.node->isFile
+                        ? next.selectedSet.contains(line.node->fileIndex)
+                        : IsDirectoryFullySelected(*line.node, next.selectedSet);
+                    const bool prevActive = line.node->isFile && prev.activeId.has_value()
+                        && *prev.activeId == line.node->fileIndex;
+                    const bool nextActive = line.node->isFile && next.activeId.has_value()
+                        && *next.activeId == line.node->fileIndex;
                     if (prevSelected != nextSelected || prevActive != nextActive)
-                    {
-                        WriteLine(line.row, MakeNodeLine(*line.node, line.prefix, line.isLast, maxIndexDigits, next.selectedSet, next.activeId));
-                    }
+                        WriteLine(line.row, MakeNodeLine(*line.node, line.prefix, line.isLast,
+                                                         maxIndexDigits, next.selectedSet, next.activeId));
                 }
                 return;
             }
@@ -413,12 +373,13 @@ namespace cgt::app::coreRunner
             {
                 for (const auto& line : lines)
                 {
-                    const bool prevActive = line.node->isFile && prev.activeId.has_value() && *prev.activeId == line.node->fileIndex;
-                    const bool nextActive = line.node->isFile && next.activeId.has_value() && *next.activeId == line.node->fileIndex;
+                    const bool prevActive = line.node->isFile && prev.activeId.has_value()
+                        && *prev.activeId == line.node->fileIndex;
+                    const bool nextActive = line.node->isFile && next.activeId.has_value()
+                        && *next.activeId == line.node->fileIndex;
                     if (prevActive != nextActive)
-                    {
-                        WriteLine(line.row, MakeNodeLine(*line.node, line.prefix, line.isLast, maxIndexDigits, next.selectedSet, next.activeId));
-                    }
+                        WriteLine(line.row, MakeNodeLine(*line.node, line.prefix, line.isLast,
+                                                         maxIndexDigits, next.selectedSet, next.activeId));
                 }
             }
         }
@@ -429,24 +390,29 @@ namespace cgt::app::coreRunner
     {
         EnableVirtualTerminal();
 
-        if (files.empty())
-        {
-            return {};
-        }
-
-        CursorGuard cursorGuard;
-        std::wcout << HideCursor();
+        if (files.empty()) return {};
 
         const TreeNode root = BuildTree(files, rootDir);
-        const std::size_t maxIndexDigits = std::to_wstring(std::max<std::size_t>(1, CollectFileIndices(root).size())).size();
+        const std::size_t maxIndexDigits =
+            std::to_wstring(std::max<std::size_t>(1, CollectFileIndices(root).size())).size();
+        const std::size_t terminalWidth =
+            static_cast<std::size_t>(std::max(1, GetTerminalWidth()));
 
         std::vector<RenderLine> lines;
-        std::size_t row = 4;
+        std::size_t row = 3 + CountWrappedRows(CountRootVisibleCells(root, maxIndexDigits), terminalWidth);
         for (std::size_t i = 0; i < root.children.size(); ++i)
-        {
-            CollectRenderLines(root.children[i], L"", i + 1 == root.children.size(), row, lines);
-        }
-        const std::size_t promptRow = lines.empty() ? 5 : lines.back().row + 2;
+            CollectRenderLines(root.children[i], L"", i + 1 == root.children.size(),
+                               row, terminalWidth, maxIndexDigits, lines);
+
+        const std::size_t promptRow = row + 1;
+
+        // Expand the buffer AND anchor the viewport — must be called before
+        // any WriteLine so the buffer is large enough for all rows.
+        EnsureConsoleBufferHeight(promptRow + 4);
+
+        SessionGuard sessionGuard(promptRow);
+
+        std::wcout << HideCursor();
 
         std::wstring buffer;
         std::size_t cursor = 0;
@@ -456,10 +422,7 @@ namespace cgt::app::coreRunner
         for (;;)
         {
             KeyEvent key;
-            if (!ReadKey(key))
-            {
-                continue;
-            }
+            if (!ReadKey(key)) continue;
 
             const ParseState prevState = state;
             const std::wstring prevBuffer = buffer;
@@ -468,28 +431,20 @@ namespace cgt::app::coreRunner
             switch (key.type)
             {
                 case KeyEvent::Type::Escape:
-                    ClearScreen();
                     return {};
 
                 case KeyEvent::Type::Enter:
                 {
                     const ParseState finalState = ParseBuffer(buffer, cursor, files.size());
-                    ClearScreen();
                     return finalState.selectedIds;
                 }
 
                 case KeyEvent::Type::Left:
-                    if (cursor > 0)
-                    {
-                        --cursor;
-                    }
+                    if (cursor > 0) --cursor;
                     break;
 
                 case KeyEvent::Type::Right:
-                    if (cursor < buffer.size())
-                    {
-                        ++cursor;
-                    }
+                    if (cursor < buffer.size()) ++cursor;
                     break;
 
                 case KeyEvent::Type::Home:
@@ -512,7 +467,6 @@ namespace cgt::app::coreRunner
                 case KeyEvent::Type::Down:
                 {
                     std::size_t target = 1;
-
                     if (state.activeId.has_value())
                     {
                         target = *state.activeId;
@@ -525,26 +479,16 @@ namespace cgt::app::coreRunner
                             try
                             {
                                 target = static_cast<std::size_t>(std::stoull(token));
-                                if (target == 0 || target > files.size())
-                                {
-                                    target = 1;
-                                }
+                                if (target == 0 || target > files.size()) target = 1;
                             }
-                            catch (...)
-                            {
-                                target = 1;
-                            }
+                            catch (...) { target = 1; }
                         }
                     }
 
                     if (key.type == KeyEvent::Type::Up)
-                    {
                         target = target > 1 ? target - 1 : 1;
-                    }
                     else
-                    {
                         target = target < files.size() ? target + 1 : files.size();
-                    }
 
                     if (state.activeId.has_value())
                     {
@@ -564,24 +508,16 @@ namespace cgt::app::coreRunner
                                 break;
                             }
                         }
-
-                        if (!replaced)
-                        {
-                            InsertText(buffer, cursor, std::to_wstring(target));
-                        }
+                        if (!replaced) InsertText(buffer, cursor, std::to_wstring(target));
                     }
                     break;
                 }
 
                 case KeyEvent::Type::Character:
                     if (key.ch >= L'0' && key.ch <= L'9')
-                    {
                         InsertText(buffer, cursor, std::wstring(1, key.ch));
-                    }
                     else if (key.ch == L' ')
-                    {
                         InsertText(buffer, cursor, L" ");
-                    }
                     break;
 
                 default:
@@ -590,7 +526,9 @@ namespace cgt::app::coreRunner
 
             state = ParseBuffer(buffer, cursor, files.size());
 
-            if (buffer != prevBuffer || cursor != prevCursor || prevState.selectedSet != state.selectedSet || prevState.activeId != state.activeId)
+            if (buffer != prevBuffer || cursor != prevCursor ||
+                prevState.selectedSet != state.selectedSet ||
+                prevState.activeId != state.activeId)
             {
                 UpdateChangedLines(root, lines, prevState, state, maxIndexDigits);
                 RenderPrompt(promptRow, buffer, cursor);

@@ -5,6 +5,8 @@
 #include <map>
 #include <string_view>
 
+#include "util/Types.h"
+
 namespace cgt::config
 {
     inline constexpr std::wstring_view kConfigFileName = L".cgtconfig";

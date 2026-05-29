@@ -146,7 +146,7 @@ namespace cgt::app::coreRunner
                 }
                 line += prefix;
                 line += connector;
-                const cgt::config::RGB extColor = cgt::config::GetExtColor(node.absolutePath.extension().wstring());
+                const cgt::RGB extColor = cgt::config::GetExtColor(node.absolutePath.extension().wstring());
                 line += MakeAnsiFg(extColor);
                 line += node.name;
                 line += MakeAnsiReset();
