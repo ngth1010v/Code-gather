@@ -83,7 +83,7 @@ namespace cgt::ui::teminal
     bool IsResize(WindowSize& size);
 
     bool IsMouseDown(CursorPos& pos, std::vector<MouseKey>& key);
-    bool IsMouseScroll(int& delta);
+    bool IsMouseScroll(CursorPos& pos, int& delta);
     
     bool IsKeyDown(std::vector<wchar>& key);
     bool IsCmdKeyDown(std::vector<CmdKey>& key);

@@ -36,9 +36,19 @@ namespace cgt::ui::teminal
             State().mouse_events.push_back({pos, keys});
         }
 
-        void PushScroll(int delta)
+        void PushScroll(const CursorPos& pos, int delta)
         {
-            State().pending_scroll_delta += delta;
+            auto& events = State().scroll_events;
+            
+            // Coalesce high-speed scrolls if they happen at the exact same coordinate
+            if (!events.empty() && events.back().pos.x == pos.x && events.back().pos.y == pos.y)
+            {
+                events.back().delta += delta;
+            }
+            else
+            {
+                events.push_back({pos, delta});
+            }
         }
 
         void PushKey(const std::vector<wchar>& key)
@@ -361,6 +371,12 @@ namespace cgt::ui::teminal
             {
                 const MOUSE_EVENT_RECORD& m = rec.Event.MouseEvent;
                 
+                // Get the current mouse position coordinates
+                CursorPos current_pos{ 
+                    static_cast<int>(m.dwMousePosition.X), 
+                    static_cast<int>(m.dwMousePosition.Y) 
+                };
+
                 // Handle Scroll Wheels
                 if (m.dwEventFlags & MOUSE_WHEELED)
                 {
@@ -369,7 +385,8 @@ namespace cgt::ui::teminal
                     int ticks = wheel_delta / 120;
                     if (ticks != 0)
                     {
-                        PushScroll(ticks);
+                        // --- FIX: Pass current_pos as the first argument ---
+                        PushScroll(current_pos, ticks);
                         ++count;
                     }
                 }
@@ -383,7 +400,7 @@ namespace cgt::ui::teminal
 
                     if (!mouse_keys.empty())
                     {
-                        PushMouse(CursorPos{static_cast<int>(m.dwMousePosition.X), static_cast<int>(m.dwMousePosition.Y)}, mouse_keys);
+                        PushMouse(current_pos, mouse_keys);
                         ++count;
                     }
                 }

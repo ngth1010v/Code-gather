@@ -202,16 +202,18 @@ namespace cgt::ui::teminal
         return true;
     }
 
-    bool IsMouseScroll(int& delta)
+    bool IsMouseScroll(CursorPos& pos, int& delta)
     {
         auto& s = State();
-        if (s.pending_scroll_delta == 0)
+        if (s.scroll_events.empty())
         {
             return false;
         }
         
-        delta = s.pending_scroll_delta;
-        s.pending_scroll_delta = 0; // Clear immediately so it resets for next frame loop
+        pos = s.scroll_events.front().pos;
+        delta = s.scroll_events.front().delta;
+        
+        s.scroll_events.pop_front();
         return true;
     }
 

@@ -30,8 +30,12 @@ namespace cgt::ui::teminal
             CursorPos pos;
             std::vector<MouseKey> keys;
         };
+        struct ScrollAction {
+            CursorPos pos;
+            int delta{0};
+        };
         std::deque<MouseAction> mouse_events;
-        int pending_scroll_delta{0};
+        std::deque<ScrollAction> scroll_events;
 
         std::deque<WindowSize> resize_events;
         std::deque<std::vector<wchar>> key_events;
