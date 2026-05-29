@@ -51,7 +51,9 @@ namespace cgt::config
         for (const auto& [ext, rgb] : state.extColors)
         {
             fout << detail::ToNarrow(ext) << "="
-                 << rgb.r << "," << rgb.g << "," << rgb.b << "\n";
+                << static_cast<int>(rgb.r) << "," 
+                << static_cast<int>(rgb.g) << "," 
+                << static_cast<int>(rgb.b) << "\n";
         }
 
         if (!state.templates.empty())

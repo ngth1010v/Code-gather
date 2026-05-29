@@ -42,7 +42,7 @@ namespace cgt::config::detail
         }
 
         ok = true;
-        return {nums[0], nums[1], nums[2]};
+        return {static_cast<uint8_t>(nums[0]), static_cast<uint8_t>(nums[1]), static_cast<uint8_t>(nums[2])};
     }
 
     std::vector<std::wstring> ParseListLine(const std::wstring& value)
