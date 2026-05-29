@@ -45,6 +45,12 @@ add_executable(${AppName}
 
     src/scan/DiscoveryScanner.cpp
 
+    src/ui/panel/PanelCommon.cpp
+    src/ui/panel/PanelGeometry.cpp
+    src/ui/panel/PanelLines.cpp
+    src/ui/panel/PanelRender.cpp
+    src/ui/panel/PanelScroll.cpp
+
     src/ui/Terminal.cpp
     src/ui/terminal/Ansi.cpp
     src/ui/terminal/Input.cpp
