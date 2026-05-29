@@ -174,7 +174,7 @@ namespace cgt::ui::teminal
         return ok ? 0 : -1;
     }
 
-    bool OnResize(WindowSize& size)
+    bool IsResize(WindowSize& size)
     {
         auto& s = State();
         if (s.resize_events.empty())
@@ -186,7 +186,7 @@ namespace cgt::ui::teminal
         return true;
     }
 
-    bool OnMouseDown(CursorPos& pos)
+    bool IsMouseDown(CursorPos& pos)
     {
         auto& s = State();
         if (s.mouse_events.empty())
@@ -198,7 +198,7 @@ namespace cgt::ui::teminal
         return true;
     }
 
-    bool OnKeyDown(std::vector<wchar>& key)
+    bool IsKeyDown(std::vector<wchar>& key)
     {
         auto& s = State();
         if (s.key_events.empty())
@@ -210,7 +210,7 @@ namespace cgt::ui::teminal
         return true;
     }
 
-    bool OnCmdKeyDown(std::vector<CmdKey>& key)
+    bool IsCmdKeyDown(std::vector<CmdKey>& key)
     {
         auto& s = State();
         if (s.cmd_events.empty())

@@ -72,8 +72,8 @@ namespace cgt::ui::teminal
     int Print(std::wstring_view text);
     int Flush();
 
-    bool OnResize(WindowSize& size);
-    bool OnMouseDown(CursorPos& pos);
-    bool OnKeyDown(std::vector<wchar>& key);
-    bool OnCmdKeyDown(std::vector<CmdKey>& key);
+    bool IsResize(WindowSize& size);
+    bool IsMouseDown(CursorPos& pos);
+    bool IsKeyDown(std::vector<wchar>& key);
+    bool IsCmdKeyDown(std::vector<CmdKey>& key);
 }
