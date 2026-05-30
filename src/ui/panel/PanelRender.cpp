@@ -102,7 +102,7 @@ namespace cgt::ui::panel
 
         for (int row = 0; row < visibleHeight; ++row)
         {
-            cgt::ui::teminal::MoveTo({pos.x, pos.y + row});
+            cgt::ui::teminal::MoveCursorTo({pos.x, pos.y + row});
             cgt::ui::teminal::SetFontColor(clearLine.color);
             cgt::ui::teminal::SetBackgroundColor(clearLine.bgColor);
             cgt::ui::teminal::Print(spaces);
@@ -147,7 +147,7 @@ namespace cgt::ui::panel
             return detail::kNoChange;
         }
 
-        cgt::ui::teminal::MoveTo({m_pos.x, m_pos.y + rowIndex});
+        cgt::ui::teminal::MoveCursorTo({m_pos.x, m_pos.y + rowIndex});
         cgt::ui::teminal::SetFontColor(newLine.color);
         cgt::ui::teminal::SetBackgroundColor(newLine.bgColor);
         cgt::ui::teminal::Print(output);

@@ -142,7 +142,7 @@ namespace cgt::ui::teminal
         return 0;
     }
 
-    int MoveTo(const CursorPos& pos)
+    int MoveCursorTo(const CursorPos& pos)
     {
         AppendMoveTo(pos);
         return 0;

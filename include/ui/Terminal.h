@@ -73,7 +73,7 @@ namespace cgt::ui::teminal
     int ShowCursor(bool visible);
     int SetTitle(std::wstring_view title);
 
-    int MoveTo(const CursorPos& pos);
+    int MoveCursorTo(const CursorPos& pos);
     int SetFontColor(const RGB& rgb);
     int SetBackgroundColor(const RGB& rgb);
 
