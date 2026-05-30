@@ -15,6 +15,8 @@ namespace cgt::ui::teminal
     bool PlatformGetSize(WindowSize& size);
     bool PlatformGetCursorPos(CursorPos& pos);
 
+    bool PlatformGetOriginalColors(RGB& fg, RGB& bg);
+
 #ifndef _WIN32
     bool PlatformReadBytes(std::string& bytes);
 #endif

@@ -21,6 +21,10 @@ namespace cgt::ui::teminal
         RGB fg{};
         RGB bg{};
 
+        bool default_colors_captured{false};
+        RGB original_fg{};
+        RGB original_bg{};
+
         WindowSize last_size{};
         bool size_valid{false};
 

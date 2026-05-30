@@ -3,6 +3,7 @@
 #include <cerrno>
 #include <cstdio>
 #include <cstring>
+#include <sstream>
 
 #ifdef _WIN32
     #include <windows.h>
@@ -12,6 +13,11 @@
     #include <sys/ioctl.h>
     #include <termios.h>
     #include <unistd.h>
+#endif
+
+#ifdef _WIN32
+    #include <io.h>
+    #include <fcntl.h>
 #endif
 
 namespace cgt::ui::teminal
@@ -52,6 +58,44 @@ namespace cgt::ui::teminal
             return ctx;
         }
 #endif
+
+    bool ParseAnsiColorResponse(const std::string& resp, RGB& color) {
+            std::size_t idx = resp.find("rgb:");
+            if (idx == std::string::npos) return false;
+            
+            idx += 4; // Skip past "rgb:"
+            unsigned int r = 0, g = 0, b = 0;
+            
+            // Terminal responses can use 4, 8, 12, or 16 bits per channel (e.g., rgb:1a1a/2b2b/3c3c)
+            // We read them dynamically and scale them to a standard 8-bit scale [0-255]
+            char divider;
+            std::string_view sv(resp.data() + idx, resp.size() - idx);
+            std::stringstream ss;
+            ss << sv;
+            
+            std::string r_str, g_str, b_str;
+            if (std::getline(ss, r_str, '/') && std::getline(ss, g_str, '/') && std::getline(ss, b_str, '\x07')) {
+                // Strip trailing structural bytes if necessary
+                if (!b_str.empty() && (b_str.back() == '\x1b' || b_str.back() == '\\')) {
+                    b_str.pop_back();
+                }
+                
+                try {
+                    unsigned long r_val = std::stoul(r_str, nullptr, 16);
+                    unsigned long g_val = std::stoul(g_str, nullptr, 16);
+                    unsigned long b_val = std::stoul(b_str, nullptr, 16);
+                    
+                    // Downscale values down to 8 bits mapping matching terminal resolution format
+                    color.r = static_cast<std::uint8_t>(r_val >> (4 * (r_str.size() - 2)));
+                    color.g = static_cast<std::uint8_t>(g_val >> (4 * (g_str.size() - 2)));
+                    color.b = static_cast<std::uint8_t>(b_val >> (4 * (b_str.size() - 2)));
+                    return true;
+                } catch (...) {
+                    return false;
+                }
+            }
+            return false;
+        }
     }
 
     bool PlatformInit()
@@ -385,4 +429,110 @@ namespace cgt::ui::teminal
         return true;
     }
 #endif
+bool PlatformGetOriginalColors(RGB& fg, RGB& bg)
+    {
+        // 1. Fire off the theme query sequences to stdout
+        const char query_seq[] = "\x1b]10;?\x07\x1b]11;?\x07";
+        if (!PlatformWrite(query_seq))
+        {
+            return false;
+        }
+
+        // Force downstream pipeline synchronization
+#ifdef _WIN32
+        auto& c = Ctx();
+        std::fflush(stdout);
+        
+        // Temporarily change STDIN to binary/raw mode if it's acting as a stream pipe
+        int old_stdin_mode = _setmode(_fileno(stdin), _O_BINARY);
+#else
+        ::tcdrain(Ctx().out_fd);
+#endif
+
+        std::string buffer;
+        buffer.reserve(128);
+        
+        bool fg_found = false;
+        bool bg_found = false;
+
+        // Query polling window loop
+        for (int attempt = 0; attempt < 40; ++attempt)
+        {
+#ifdef _WIN32
+            // FIX: Try reading from pipe/stream first (Handles VS Code / ConPTY environments)
+            DWORD bytes_avail = 0;
+            HANDLE h_stdin = GetStdHandle(STD_INPUT_HANDLE);
+            
+            // Check if there is data pending on the standard input handle pipeline
+            if (PeekNamedPipe(h_stdin, nullptr, 0, nullptr, &bytes_avail, nullptr) && bytes_avail > 0) {
+                std::string pipe_buf(bytes_avail, '\0');
+                DWORD bytes_read = 0;
+                if (ReadFile(h_stdin, &pipe_buf[0], bytes_avail, &bytes_read, nullptr) && bytes_read > 0) {
+                    buffer.append(pipe_buf.c_str(), bytes_read);
+                }
+            } 
+            else {
+                // Fallback: Read from native Win32 Console Input events array (Handles raw Windows Terminal / cmd)
+                DWORD available_events = 0;
+                if (GetNumberOfConsoleInputEvents(c.in, &available_events) && available_events > 0) {
+                    INPUT_RECORD records[64];
+                    DWORD read_count = 0;
+                    if (ReadConsoleInputA(c.in, records, 64, &read_count)) {
+                        for (DWORD i = 0; i < read_count; ++i) {
+                            if (records[i].EventType == KEY_EVENT && records[i].Event.KeyEvent.bKeyDown) {
+                                char ch = records[i].Event.KeyEvent.uChar.AsciiChar;
+                                if (ch != 0) buffer.push_back(ch);
+                            }
+                        }
+                    }
+                }
+            }
+#else
+            // POSIX remains perfectly happy with your raw bytes descriptor parser
+            std::string chunks;
+            if (PlatformReadBytes(chunks) && !chunks.empty()) {
+                buffer.append(chunks);
+            }
+#endif
+
+            // Check for the visual color patterns inside incoming data blocks
+            if (!fg_found && buffer.find("\x1b]10;") != std::string::npos) {
+                std::size_t fg_start = buffer.find("\x1b]10;");
+                if (buffer.find('\x07', fg_start) != std::string::npos) {
+                    fg_found = ParseAnsiColorResponse(buffer.substr(fg_start), fg);
+                }
+            }
+            if (!bg_found && buffer.find("\x1b]11;") != std::string::npos) {
+                std::size_t bg_start = buffer.find("\x1b]11;");
+                if (buffer.find('\x07', bg_start) != std::string::npos) {
+                     bg_found = ParseAnsiColorResponse(buffer.substr(bg_start), bg);
+                }
+            }
+
+            // Break early the moment both components are fetched cleanly
+            if (fg_found && bg_found) {
+                break;
+            }
+
+#ifdef _WIN32
+            Sleep(5);
+#else
+            ::usleep(5000);
+#endif
+        }
+
+#ifdef _WIN32
+        // Restore standard console input operational state mode properties
+        if (old_stdin_mode != -1) {
+            _setmode(_fileno(stdin), old_stdin_mode);
+        }
+#endif
+
+        // If VS Code completely blocks query loops under a specific version, 
+        // fall back directly to standard matching dark background colors instead of pure black {0,0,0}
+        if (!fg_found) fg = RGB{235, 235, 235}; 
+        if (!bg_found) bg = RGB{25, 25, 25};    // Matches default VS Code Dark Modern background value
+        
+        return true;
+    }
 }

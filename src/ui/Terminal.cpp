@@ -33,6 +33,8 @@ namespace cgt::ui::teminal
         s = TerminalState{};
         s.initialized = true;
 
+        s.default_colors_captured = PlatformGetOriginalColors(s.original_fg, s.original_bg);
+
         AppendAltEnter();
         AppendHideCursor();
         s.cursor_visible = false;
@@ -163,22 +165,22 @@ namespace cgt::ui::teminal
     int GetDefaultFontColor(RGB& rgb)
     {
         auto& s = State();
-        if (!s.fg_set)
+        if (!s.default_colors_captured)
         {
             return -1;
         }
-        rgb = s.fg;
+        rgb = s.original_fg; // Return the cached original layout color
         return 0;
     }
 
     int GetDefaultBgColor(RGB& rgb)
     {
         auto& s = State();
-        if (!s.bg_set)
+        if (!s.default_colors_captured)
         {
             return -1;
         }
-        rgb = s.bg;
+        rgb = s.original_bg; // Return the cached original layout color
         return 0;
     }
 
