@@ -66,6 +66,11 @@ namespace cgt::ui::panel
         return detail::kOk;
     }
 
+    int Panel::RePrint()
+    {
+        return RenderViewport(true);
+    }
+
     int Panel::SetScroll(bool scrollable)
     {
         m_scrollable = scrollable;

@@ -50,6 +50,7 @@ namespace cgt::ui::panel
         int Init();
         int Destroy();
         int Clean();
+        int RePrint();
 
         int SetScroll(bool scrollable);
 
