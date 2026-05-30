@@ -18,7 +18,6 @@ add_executable(${AppName}
     src/app/TemplateRunner.cpp
 
     src/app/CoreRunner.cpp
-    src/app/coreRunner/CoreBuildTree.cpp
     src/app/coreRunner/CoreSelectionInput.cpp
     src/app/coreRunner/CoreSelectionUi.cpp
     src/app/coreRunner/CoreTreeRender.cpp
