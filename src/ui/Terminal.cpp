@@ -160,6 +160,28 @@ namespace cgt::ui::teminal
         return 0;
     }
 
+    int GetDefaultFontColor(RGB& rgb)
+    {
+        auto& s = State();
+        if (!s.fg_set)
+        {
+            return -1;
+        }
+        rgb = s.fg;
+        return 0;
+    }
+
+    int GetDefaultBgColor(RGB& rgb)
+    {
+        auto& s = State();
+        if (!s.bg_set)
+        {
+            return -1;
+        }
+        rgb = s.bg;
+        return 0;
+    }
+
     int Print(std::wstring_view text)
     {
         AppendText(text);

@@ -77,6 +77,9 @@ namespace cgt::ui::teminal
     int SetFontColor(const RGB& rgb);
     int SetBackgroundColor(const RGB& rgb);
 
+    int GetDefaultFontColor(RGB& rgb);
+    int GetDefaultBgColor(RGB& rgb);
+
     int Print(std::wstring_view text);
     int Flush();
 
