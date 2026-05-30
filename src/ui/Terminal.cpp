@@ -37,7 +37,12 @@ namespace cgt::ui::teminal
         AppendHideCursor();
         s.cursor_visible = false;
         AppendClear();
-        return Flush();
+        Flush();
+
+        PlatformWrite("\x1b[2J\x1b[H"); 
+        std::fflush(stdout);
+
+        return 0;
     }
 
     int Destroy()

@@ -63,11 +63,19 @@ namespace cgt::ui::teminal
             return true;
         }
 
-        c.in = GetStdHandle(STD_INPUT_HANDLE);
-        c.out = GetStdHandle(STD_OUTPUT_HANDLE);
+        // Fix: Explicitly open CONIN$ and CONOUT$ to bypass ConPTY proxy limitations inside VS Code
+        c.in = CreateFileA("CONIN$", GENERIC_READ | GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr, OPEN_EXISTING, 0, nullptr);
+        c.out = CreateFileA("CONOUT$", GENERIC_READ | GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr, OPEN_EXISTING, 0, nullptr);
+
         if (c.in == INVALID_HANDLE_VALUE || c.out == INVALID_HANDLE_VALUE)
         {
-            return false;
+            // Fallback to GetStdHandle if direct console files are completely inaccessible
+            c.in = GetStdHandle(STD_INPUT_HANDLE);
+            c.out = GetStdHandle(STD_OUTPUT_HANDLE);
+            if (c.in == INVALID_HANDLE_VALUE || c.out == INVALID_HANDLE_VALUE)
+            {
+                return false;
+            }
         }
 
         if (!GetConsoleMode(c.in, &c.old_in_mode))
@@ -91,6 +99,7 @@ namespace cgt::ui::teminal
         }
 
         DWORD out_mode = c.old_out_mode;
+        // ENABLE_VIRTUAL_TERMINAL_PROCESSING tells VS Code's terminal to parse your ANSI sequences instead of printing raw text
         out_mode |= ENABLE_VIRTUAL_TERMINAL_PROCESSING | DISABLE_NEWLINE_AUTO_RETURN;
         if (!SetConsoleMode(c.out, out_mode))
         {
@@ -163,6 +172,11 @@ namespace cgt::ui::teminal
         SetConsoleMode(c.out, c.old_out_mode);
         SetConsoleCP(c.old_in_cp);
         SetConsoleOutputCP(c.old_out_cp);
+
+        // Safely close the opened file descriptors if they were created via CreateFileA
+        if (c.in != INVALID_HANDLE_VALUE && c.in != GetStdHandle(STD_INPUT_HANDLE)) CloseHandle(c.in);
+        if (c.out != INVALID_HANDLE_VALUE && c.out != GetStdHandle(STD_OUTPUT_HANDLE)) CloseHandle(c.out);
+
         c = WinContext{};
 #else
         auto& c = Ctx();
@@ -193,7 +207,9 @@ namespace cgt::ui::teminal
         }
 
         DWORD written = 0;
-        return WriteFile(c.out, bytes.data(), static_cast<DWORD>(bytes.size()), &written, nullptr) != 0 && written == bytes.size();
+        bool success = WriteFile(c.out, bytes.data(), static_cast<DWORD>(bytes.size()), &written, nullptr) != 0 && written == bytes.size();
+        std::fflush(stdout);
+        return success;
 #else
         auto& c = Ctx();
         if (!c.initialized)
