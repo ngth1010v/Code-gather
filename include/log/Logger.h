@@ -14,6 +14,10 @@ namespace cgt::log
     class Logger
     {
     public:
+
+        static void SetEnabled(bool enable);
+        static bool IsEnabled();
+
         static void Info(const std::wstring& module, const std::wstring& message);
         static void Warning(const std::wstring& module, const std::wstring& message);
         static void Error(const std::wstring& module, const std::wstring& message);
