@@ -12,9 +12,9 @@ namespace cgt::app::coreRunner
     inline constexpr cgt::RGB kHeaderBackground{ 24, 24, 24 };
     inline constexpr cgt::RGB kPanelBackground{ 18, 18, 18 };
 
-    inline constexpr cgt::RGB kDetectedHeaderFg{ 0, 255, 255 };
-    inline constexpr cgt::RGB kSelectedHeaderFg{ 0, 255, 255 };
-    inline constexpr cgt::RGB kInputHeaderFg{ 0, 255, 255 };
+    inline constexpr cgt::RGB kDetectedHeaderFg{ 80, 255, 255 };
+    inline constexpr cgt::RGB kSelectedHeaderFg{ 80, 255, 255 };
+    inline constexpr cgt::RGB kInputHeaderFg   { 80, 255, 255 };
 
     inline constexpr cgt::RGB kSelectedBackground{ 40, 96, 180 };
     inline constexpr cgt::RGB kDetectedSelectedBackground{ 44, 88, 60 };
