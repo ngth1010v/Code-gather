@@ -7,6 +7,14 @@ namespace cgt::ui::panel
 {
     namespace
     {
+        PanelLine MakeEmptyLine()
+        {
+            PanelLine line{};
+            teminal::GetDefaultBgColor(line.bgColor);
+            teminal::GetDefaultFontColor(line.color);
+            return line;
+        }
+
         int RoundToInt(float value)
         {
             return static_cast<int>(std::lround(value));
@@ -169,7 +177,7 @@ namespace cgt::ui::panel
 
         if (m_initialized)
         {
-            m_visibleCache.assign(static_cast<std::size_t>(std::max(0, m_size.h)), PanelLine{});
+            m_visibleCache.assign(static_cast<std::size_t>(std::max(0, m_size.h)), MakeEmptyLine());
             m_visibleValid.assign(static_cast<std::size_t>(std::max(0, m_size.h)), 0);
 
             ClampOffset();

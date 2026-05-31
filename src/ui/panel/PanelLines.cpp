@@ -6,9 +6,13 @@ namespace cgt::ui::panel
 {
     namespace
     {
-        PanelLine MakeEmptyLine()
+        PanelLine MakeEmptyLine(PanelLine line = {})
         {
-            return PanelLine{};
+            PanelLine emptyLine = line;
+            emptyLine.text.clear();
+            teminal::GetDefaultBgColor(emptyLine.bgColor);
+            teminal::GetDefaultFontColor(emptyLine.color);
+            return emptyLine;
         }
 
         bool EnsureLineIndex(std::vector<PanelLine>& lines, int y)
@@ -44,7 +48,7 @@ namespace cgt::ui::panel
         const int rowIndex = y - 1 - m_offset;
         if (m_initialized && rowIndex >= 0 && rowIndex < m_size.h)
         {
-            const PanelLine* oldLine = m_visibleValid.size() > static_cast<std::size_t>(rowIndex) && m_visibleValid[static_cast<std::size_t>(rowIndex)]
+            const PanelLine* oldLine = (m_visibleValid.size() > static_cast<std::size_t>(rowIndex) && m_visibleValid[static_cast<std::size_t>(rowIndex)])
                                      ? &m_visibleCache[static_cast<std::size_t>(rowIndex)]
                                      : nullptr;
 
@@ -53,12 +57,15 @@ namespace cgt::ui::panel
 
             if (repaintCount > 0)
             {
-                RenderRow(rowIndex, m_lines[index], oldLine, repaintCount == maxWidth);
+                // Ensure cache arrays are safely expanded to hold the current rowIndex structural updates
                 if (m_visibleCache.size() <= static_cast<std::size_t>(rowIndex))
                 {
                     m_visibleCache.resize(static_cast<std::size_t>(m_size.h));
                     m_visibleValid.resize(static_cast<std::size_t>(m_size.h), 0);
                 }
+
+                RenderRow(rowIndex, m_lines[index], oldLine, repaintCount == maxWidth);
+                
                 m_visibleCache[static_cast<std::size_t>(rowIndex)] = m_lines[index];
                 m_visibleValid[static_cast<std::size_t>(rowIndex)] = 1;
                 m_hasDrawn = true;
@@ -85,7 +92,7 @@ namespace cgt::ui::panel
             return detail::kNoChange;
         }
 
-        m_lines[index] = MakeEmptyLine();
+        m_lines[index] = MakeEmptyLine(m_lines[index]);
         ClampOffset();
 
         const int rowIndex = y - 1 - m_offset;
@@ -112,7 +119,7 @@ namespace cgt::ui::panel
             return detail::kError;
         }
 
-        const std::size_t index = static_cast<std::size_t>(y - 1);
+        const std::size_t index = static_cast<std::size_t>(y);
         if (index >= m_lines.size())
         {
             return detail::kNoChange;

@@ -8,7 +8,10 @@ namespace cgt::ui::panel
     {
         PanelLine MakeEmptyLine()
         {
-            return PanelLine{};
+            PanelLine line{};
+            teminal::GetDefaultBgColor(line.bgColor); // FIX: Fetch terminal BG
+            teminal::GetDefaultFontColor(line.color); // FIX: Fetch terminal Font
+            return line;
         }
     }
 
@@ -102,14 +105,15 @@ namespace cgt::ui::panel
             return detail::kOk;
         }
 
-        const PanelLine clearLine{};
+        PanelLine clearLine{};
+        cgt::ui::teminal::GetDefaultBgColor(clearLine.bgColor);
         const std::wstring spaces(static_cast<std::size_t>(visibleWidth), L' ');
 
+        cgt::ui::teminal::SetFontColor(clearLine.color);
+        cgt::ui::teminal::SetBackgroundColor(clearLine.bgColor);
         for (int row = 0; row < visibleHeight; ++row)
         {
             cgt::ui::teminal::MoveCursorTo({pos.x, pos.y + row});
-            cgt::ui::teminal::SetFontColor(clearLine.color);
-            cgt::ui::teminal::SetBackgroundColor(clearLine.bgColor);
             cgt::ui::teminal::Print(spaces);
         }
 
@@ -183,7 +187,7 @@ namespace cgt::ui::panel
             const int lineIndex = m_offset + row;
             PanelLine current = (lineIndex >= 0 && lineIndex < static_cast<int>(m_lines.size()))
                 ? m_lines[static_cast<std::size_t>(lineIndex)]
-                : PanelLine{};
+                : MakeEmptyLine();
 
             const PanelLine* oldLine = nullptr;
             if (row >= 0 && row < static_cast<int>(m_visibleValid.size()) && m_visibleValid[static_cast<std::size_t>(row)] != 0)

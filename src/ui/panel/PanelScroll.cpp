@@ -89,11 +89,11 @@ namespace cgt::ui::panel
 
         if (delta > 0)
         {
-            MoveUp(delta);
+            MoveUp(delta * 2);
         }
         else
         {
-            MoveDown(-delta);
+            MoveDown(-delta * 2);
         }
 
         return detail::kOk;
