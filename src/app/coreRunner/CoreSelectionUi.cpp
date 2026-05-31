@@ -1,221 +1,207 @@
 #include "app/coreRunner/CoreSelectionUi.h"
 
+#include "app/coreRunner/CoreConstants.h"
+#include "app/coreRunner/CoreDetectedPanel.h"
+#include "app/coreRunner/CoreInput.h"
+#include "app/coreRunner/CoreInputPanel.h"
+#include "app/coreRunner/CoreSelectedPanel.h"
 #include "app/coreRunner/CoreSelectionInput.h"
-#include "app/coreRunner/CoreTreeRender.h"
-#include "scan/DiscoveryScanner.h"
-#include "ui/Panel.h"
+#include "app/coreRunner/CoreUtils.h"
+#include "app/coreRunner/TreeBuilder.h"
 #include "ui/Terminal.h"
-#include "util/PathUtil.h"
 
 #include <algorithm>
 #include <chrono>
-#include <cwchar>
-#include <iostream>
-#include <set>
-#include <string>
 #include <thread>
-#include <windows.h>
+#include <vector>
 
 namespace cgt::app::coreRunner
 {
     namespace
     {
         using WindowSize = cgt::ui::teminal::WindowSize;
-        using CursorPos = cgt::ui::teminal::CursorPos;
         using CmdKey = cgt::ui::teminal::CmdKey;
-        using MouseKey = cgt::ui::teminal::MouseKey;
-
-        constexpr int kTargetFps = 30;
-        constexpr int kMinLeftWidth = 18;
-        constexpr int kMinRightWidth = 18;
-        constexpr int kMinPromptHeight = 2;
-        constexpr int kPromptHeaderHeight = 1;
-
-        std::wstring CursorMarker(const std::wstring& text, std::size_t cursor)
-        {
-            const std::size_t pos = std::min(cursor, text.size());
-            std::wstring out;
-            out.reserve(text.size() + 1);
-            out.append(text.substr(0, pos));
-            out.push_back(L'|');
-            out.append(text.substr(pos));
-            return out;
-        }
-
-        void EnableVirtualTerminal()
-        {
-            HANDLE hOut = GetStdHandle(STD_OUTPUT_HANDLE);
-            if (hOut == INVALID_HANDLE_VALUE)
-            {
-                return;
-            }
-
-            DWORD mode = 0;
-            if (!GetConsoleMode(hOut, &mode))
-            {
-                return;
-            }
-
-            mode |= ENABLE_VIRTUAL_TERMINAL_PROCESSING;
-            SetConsoleMode(hOut, mode);
-        }
-
-        std::wstring MoveCursorTo(std::size_t row, std::size_t col = 1)
-        {
-            std::wstring out;
-            out.reserve(24);
-            out += L"\x1b[";
-            out += std::to_wstring(row);
-            out += L';';
-            out += std::to_wstring(col);
-            out += L'H';
-            return out;
-        }
-
-        std::wstring ClearLine()
-        {
-            return L"\x1b[2K";
-        }
-
-        std::size_t WrapRows(std::size_t textLength, std::size_t width)
-        {
-            width = std::max<std::size_t>(1, width);
-            return std::max<std::size_t>(1, (textLength + width - 1) / width);
-        }
 
         struct Layout
         {
             int termW = 80;
             int termH = 25;
-            int leftW = 48;
-            int rightW = 31;
-            int rightX = 49;
-            int selectedTopH = 23;
-            int promptH = 2;
-            int promptY = 24;
+
+            int detectedX = 0;
+            int detectedY = 0;
+            int detectedW = 0;
+            int detectedH = 0;
+
+            int selectedX = 0;
+            int selectedY = 0;
+            int selectedW = 0;
+            int selectedH = 0;
+
+            int inputX = 0;
+            int inputY = 0;
+            int inputW = 0;
+            int inputH = 0;
         };
 
-        Layout ComputeLayout(const WindowSize& size, const std::wstring& promptText)
+        int ClampSplitWidth(int termW)
+        {
+            if (termW <= 1)
+            {
+                return 1;
+            }
+
+            int left = static_cast<int>(termW * 60 / 100);
+            left = std::max(kMinLeftPanelWidth, left);
+
+            if (left >= termW)
+            {
+                left = termW - 1;
+            }
+
+            if (termW - left < kMinRightPanelWidth && termW > kMinRightPanelWidth)
+            {
+                left = std::max(1, termW - kMinRightPanelWidth);
+            }
+
+            return std::max(1, std::min(left, termW - 1));
+        }
+
+        Layout ComputeLayout(const WindowSize& size, std::size_t inputNeededHeight)
         {
             Layout layout;
+
             layout.termW = std::max(1, size.w);
             layout.termH = std::max(1, size.h);
 
-            int left = static_cast<int>(layout.termW * 60 / 100);
-            left = std::max(kMinLeftWidth, left);
-            if (left >= layout.termW - kMinRightWidth)
+            const int leftW = ClampSplitWidth(layout.termW);
+            const int rightW = std::max(1, layout.termW - leftW);
+
+            const int availableH = layout.termH;
+
+            const int minInputH =
+                std::min(kMinInputPanelHeight, availableH);
+
+            const int minSelectedH =
+                std::min(
+                    kMinSelectedPanelHeight,
+                    std::max(1, availableH - minInputH));
+
+            int inputH = static_cast<int>(
+                std::min<std::size_t>(
+                    inputNeededHeight,
+                    static_cast<std::size_t>(
+                        std::max(1, availableH - minSelectedH))));
+
+            inputH = std::max(minInputH, inputH);
+
+            int selectedH = availableH - inputH;
+
+            if (selectedH < minSelectedH && availableH > 1)
             {
-                left = std::max(1, layout.termW - kMinRightWidth);
+                selectedH = minSelectedH;
+                inputH = std::max(1, availableH - selectedH);
             }
 
-            layout.leftW = std::max(1, left);
-            layout.rightW = std::max(1, layout.termW - layout.leftW);
-            if (layout.rightW < kMinRightWidth && layout.termW > kMinRightWidth)
+            if (selectedH < 1)
             {
-                layout.rightW = kMinRightWidth;
-                layout.leftW = std::max(1, layout.termW - layout.rightW);
+                selectedH = 1;
+                inputH = std::max(1, availableH - selectedH);
             }
 
-            layout.rightX = layout.leftW + 1;
+            layout.detectedX = 0;
+            layout.detectedY = 0;
+            layout.detectedW = leftW;
+            layout.detectedH = availableH;
 
-            const std::size_t promptWidth = static_cast<std::size_t>(std::max(1, layout.rightW));
-            const std::size_t promptRows = WrapRows(promptText.size(), promptWidth);
-            layout.promptH = static_cast<int>(std::max<std::size_t>(kMinPromptHeight, promptRows + kPromptHeaderHeight));
-            layout.promptH = std::min(layout.promptH, layout.termH);
-            if (layout.promptH > layout.termH - 1)
-            {
-                layout.promptH = std::max(1, layout.termH - 1);
-            }
+            layout.selectedX = leftW + 1;
+            layout.selectedY = 0;
+            layout.selectedW = rightW;
+            layout.selectedH = selectedH;
 
-            layout.selectedTopH = std::max(1, layout.termH - layout.promptH);
-            layout.promptY = layout.selectedTopH + 1;
+            layout.inputX = leftW + 1;
+            layout.inputY = selectedH;
+            layout.inputW = rightW;
+            layout.inputH = inputH;
+
             return layout;
         }
 
-        void ApplyPanelGeometry(cgt::ui::panel::Panel& panel,
-                                int x,
-                                int y,
-                                int w,
-                                int h)
+        struct SessionGuard
         {
-            cgt::ui::panel::PanelPos pos;
-            pos.absolute = true;
-            pos.x = x;
-            pos.y = y;
-            panel.SetPos(pos);
+            bool terminalInitialized = false;
+            bool detectedPanelInitialized = false;
+            bool selectedPanelInitialized = false;
+            bool inputPanelInitialized = false;
 
-            cgt::ui::panel::PanelSize size;
-            size.absolute = true;
-            size.w = w;
-            size.h = h;
-            panel.SetSize(size);
-        }
-
-        void RenderPromptArea(const Layout& layout,
-                              const std::wstring& buffer,
-                              std::size_t cursor,
-                              int previousPromptH)
-        {
-            const std::wstring promptHeader = L"Selected files:";
-            const std::wstring promptBody = CursorMarker(buffer, cursor);
-            const std::size_t width = static_cast<std::size_t>(std::max(1, layout.rightW));
-            const std::size_t bodyRows = WrapRows(promptBody.size(), width);
-            const int promptH = std::max(2, static_cast<int>(bodyRows + 1));
-
-            const int rowsToClear = std::max(previousPromptH, promptH);
-            for (int i = 0; i < rowsToClear; ++i)
-            {
-                const int row = layout.promptY + i;
-                std::wcout << MoveCursorTo(static_cast<std::size_t>(row), 1) << ClearLine();
-            }
-
-            std::wcout << MoveCursorTo(static_cast<std::size_t>(layout.promptY), 1)
-                       << promptHeader;
-
-            std::size_t offset = 0;
-            for (std::size_t rowIndex = 0; rowIndex < bodyRows; ++rowIndex)
-            {
-                const std::size_t begin = offset;
-                const std::size_t end = std::min(promptBody.size(), begin + width);
-                const std::wstring chunk = promptBody.substr(begin, end - begin);
-                offset = end;
-
-                std::wcout << MoveCursorTo(static_cast<std::size_t>(layout.promptY + 1 + rowIndex), 1)
-                           << chunk;
-            }
-
-            std::wcout.flush();
-        }
-
-        void RenderPanel(cgt::ui::panel::Panel& panel,
-                         const std::vector<cgt::ui::panel::PanelLine>& lines)
-        {
-            panel.Clean();
-            for (std::size_t i = 0; i < lines.size(); ++i)
-            {
-                panel.SetLine(static_cast<int>(i), lines[i]);
-            }
-        }
-
-        class SessionGuard
-        {
-        public:
-            bool initialized = false;
-            int previousPromptH = 0;
-            cgt::ui::panel::Panel detectedPanel;
-            cgt::ui::panel::Panel selectedPanel;
+            CoreDetectedPanel detectedPanel;
+            CoreSelectedPanel selectedPanel;
+            CoreInputPanel inputPanel;
 
             ~SessionGuard()
             {
-                if (initialized)
+                if (inputPanelInitialized)
+                {
+                    inputPanel.Destroy();
+                }
+                if (selectedPanelInitialized)
+                {
+                    selectedPanel.Destroy();
+                }
+                if (detectedPanelInitialized)
+                {
+                    detectedPanel.Destroy();
+                }
+                if (terminalInitialized)
                 {
                     cgt::ui::teminal::ShowCursor(true);
-                    detectedPanel.Destroy();
-                    selectedPanel.Destroy();
                     cgt::ui::teminal::Destroy();
                 }
             }
         };
+
+        void SetGeometry(SessionGuard& session, const Layout& layout)
+        {
+            cgt::ui::panel::PanelPos pos;
+            cgt::ui::panel::PanelSize size;
+
+            pos.absolute = true;
+            size.absolute = true;
+
+            // detected
+            pos.x = layout.detectedX;
+            pos.y = layout.detectedY;
+            size.w = layout.detectedW;
+            size.h = layout.detectedH;
+
+            session.detectedPanel.SetPos(pos);
+            session.detectedPanel.SetSize(size);
+
+            // selected
+            pos.x = layout.selectedX;
+            pos.y = layout.selectedY;
+            size.w = layout.selectedW;
+            size.h = layout.selectedH;
+
+            session.selectedPanel.SetPos(pos);
+            session.selectedPanel.SetSize(size);
+
+            // input
+            pos.x = layout.inputX;
+            pos.y = layout.inputY;
+            size.w = layout.inputW;
+            size.h = layout.inputH;
+
+            session.inputPanel.SetPos(pos);
+            session.inputPanel.SetSize(size);
+
+            WindowSize termSize{};
+            termSize.w = layout.termW;
+            termSize.h = layout.termH;
+
+            session.detectedPanel.OnResize(termSize);
+            session.selectedPanel.OnResize(termSize);
+            session.inputPanel.OnResize(termSize);
+        }
     }
 
     std::vector<std::size_t> CoreSelectionUi::Run(const std::vector<cgt::scan::DiscoveredFile>& files,
@@ -226,27 +212,40 @@ namespace cgt::app::coreRunner
             return {};
         }
 
-        EnableVirtualTerminal();
-
         SessionGuard session;
         if (cgt::ui::teminal::Init() != 0)
         {
             return {};
         }
-        session.initialized = true;
+        session.terminalInitialized = true;
 
-        if (session.detectedPanel.Init() != 0 || session.selectedPanel.Init() != 0)
+        if (session.detectedPanel.Init() != 0)
         {
             return {};
         }
+        session.detectedPanelInitialized = true;
 
-        cgt::ui::teminal::ShowCursor(false);
+        if (session.selectedPanel.Init() != 0)
+        {
+            return {};
+        }
+        session.selectedPanelInitialized = true;
+
+        if (session.inputPanel.Init() != 0)
+        {
+            return {};
+        }
+        session.inputPanelInitialized = true;
 
         session.detectedPanel.SetScroll(true);
         session.selectedPanel.SetScroll(true);
+        session.inputPanel.SetScroll(false);
+
+        cgt::ui::teminal::ShowCursor(false);
 
         SelectionEditor editor;
-        TreeNode detectedRoot = BuildTree(files, rootDir);
+        const TreeNode detectedRoot = BuildTree(files, rootDir);
+
         WindowSize termSize{};
         if (cgt::ui::teminal::GetSize(termSize) != 0)
         {
@@ -254,138 +253,102 @@ namespace cgt::app::coreRunner
             termSize.h = 25;
         }
 
-        auto renderAll = [&](const SelectionParseState& state)
+        cgt::ui::teminal::Clean();
+
+        const std::size_t initialInputHeight = session.inputPanel.RequiredHeight(
+            static_cast<std::size_t>(std::max(1, termSize.w - ClampSplitWidth(std::max(1, termSize.w)))),
+            editor);
+
+        Layout layout = ComputeLayout(termSize, initialInputHeight);
+        SetGeometry(session, layout);
+
+        auto renderAll = [&](bool forceReprint)
         {
+            const SelectionParseState state = editor.Parse(files.size());
             const TreeNode selectedRoot = BuildSelectedTree(files, state.selectedIds, rootDir);
-            const std::wstring promptBody = CursorMarker(editor.Buffer(), editor.Cursor());
-            const Layout layout = ComputeLayout(termSize, promptBody);
 
-            ApplyPanelGeometry(session.detectedPanel, 1, 1, layout.leftW, layout.termH);
-            ApplyPanelGeometry(session.selectedPanel, layout.rightX, 1, layout.rightW, layout.selectedTopH);
-
-            const auto detectedLines = BuildTreePanelLines(detectedRoot, L"Detected files", state.selectedSet, state.activeId);
-            const auto selectedLines = BuildTreePanelLines(selectedRoot, L"Selected files", state.selectedSet, state.activeId);
-
-            RenderPanel(session.detectedPanel, detectedLines);
-            RenderPanel(session.selectedPanel, selectedLines);
-
-            RenderPromptArea(layout, editor.Buffer(), editor.Cursor(), session.previousPromptH);
-            session.previousPromptH = layout.promptH;
-            return layout;
+            session.detectedPanel.Render(detectedRoot, state, forceReprint);
+            session.selectedPanel.Render(selectedRoot, forceReprint);
+            session.inputPanel.Render(editor, forceReprint);
         };
 
-        SelectionParseState state = editor.Parse(files.size());
-        Layout layout = renderAll(state);
+        renderAll(true);
         cgt::ui::teminal::Flush();
 
-        bool running = true;
-        while (running)
+        while (true)
         {
-            auto frameStart = std::chrono::steady_clock::now();
-
+            const auto frameStart = std::chrono::steady_clock::now();
             cgt::ui::teminal::Update();
+
+            bool shouldFlush = false;
 
             WindowSize newSize{};
             if (cgt::ui::teminal::IsResize(newSize))
             {
                 termSize = newSize;
-                layout = renderAll(editor.Parse(files.size()));
-                cgt::ui::teminal::Flush();
+                cgt::ui::teminal::Clean();
+
+                const std::size_t inputNeededHeight = session.inputPanel.RequiredHeight(
+                    static_cast<std::size_t>(std::max(1, termSize.w - ClampSplitWidth(std::max(1, termSize.w)))),
+                    editor);
+
+                layout = ComputeLayout(termSize, inputNeededHeight);
+                SetGeometry(session, layout);
+                renderAll(true);
+                shouldFlush = true;
             }
 
-            CursorPos mousePos{};
-            int wheelDelta = 0;
-            if (cgt::ui::teminal::IsMouseScroll(mousePos, wheelDelta))
-            {
-                session.detectedPanel.OnMouseScroll(mousePos, wheelDelta);
-                session.selectedPanel.OnMouseScroll(mousePos, wheelDelta);
-            }
+            std::vector<wchar_t> keys;
+            std::vector<CmdKey> cmdKeys;
+            cgt::ui::teminal::IsKeyDown(keys);
+            cgt::ui::teminal::IsCmdKeyDown(cmdKeys);
 
             bool changed = false;
             bool finish = false;
+            bool cancel = false;
 
-            std::vector<wchar_t> keys;
-            if (cgt::ui::teminal::IsKeyDown(keys))
+            if (!keys.empty() || !cmdKeys.empty())
             {
-                for (wchar_t ch : keys)
-                {
-                    if (ch >= L'0' && ch <= L'9')
-                    {
-                        editor.InsertChar(ch);
-                        changed = true;
-                    }
-                    else if (ch == L' ')
-                    {
-                        editor.InsertChar(ch);
-                        changed = true;
-                    }
-                }
+                const auto result = HandleSelectionInput(editor, keys, cmdKeys, files.size());
+                changed = result.changed;
+                finish = result.finish;
+                cancel = result.cancel;
             }
 
-            std::vector<CmdKey> cmdKeys;
-            if (cgt::ui::teminal::IsCmdKeyDown(cmdKeys))
+            cgt::ui::teminal::CursorPos mousePos;
+            int scrollDelta = 0;
+            if (cgt::ui::teminal::IsMouseScroll(mousePos, scrollDelta))
             {
-                for (CmdKey key : cmdKeys)
-                {
-                    switch (key)
-                    {
-                        case CmdKey::Escape:
-                            return {};
-                        case CmdKey::Enter:
-                            finish = true;
-                            break;
-                        case CmdKey::Backspace:
-                            editor.Backspace();
-                            changed = true;
-                            break;
-                        case CmdKey::Delete:
-                            editor.Delete();
-                            changed = true;
-                            break;
-                        case CmdKey::Left:
-                            editor.MoveLeft();
-                            changed = true;
-                            break;
-                        case CmdKey::Right:
-                            editor.MoveRight();
-                            changed = true;
-                            break;
-                        case CmdKey::Home:
-                            editor.MoveHome();
-                            changed = true;
-                            break;
-                        case CmdKey::End:
-                            editor.MoveEnd();
-                            changed = true;
-                            break;
-                        case CmdKey::Up:
-                            editor.Step(-1, files.size());
-                            changed = true;
-                            break;
-                        case CmdKey::Down:
-                            editor.Step(+1, files.size());
-                            changed = true;
-                            break;
-                        default:
-                            break;
-                    }
+                session.detectedPanel.OnMouseScroll(mousePos, scrollDelta);
+                session.selectedPanel.OnMouseScroll(mousePos, scrollDelta);
+                shouldFlush = true;
+            }
 
-                    if (finish)
-                    {
-                        break;
-                    }
-                }
+            if (cancel)
+            {
+                return {};
             }
 
             if (finish)
             {
-                return editor.Parse(files.size()).selectedIds;
+                const auto state = editor.Parse(files.size());
+                return state.selectedIds;
             }
 
             if (changed)
             {
-                state = editor.Parse(files.size());
-                layout = renderAll(state);
+                const std::size_t inputNeededHeight = session.inputPanel.RequiredHeight(
+                    static_cast<std::size_t>(layout.selectedW),
+                    editor);
+
+                layout = ComputeLayout(termSize, inputNeededHeight);
+                SetGeometry(session, layout);
+                renderAll(false);
+                shouldFlush = true;
+            }
+
+            if (shouldFlush)
+            {
                 cgt::ui::teminal::Flush();
             }
 
@@ -397,7 +360,5 @@ namespace cgt::app::coreRunner
                 std::this_thread::sleep_for(frameMs - elapsed);
             }
         }
-
-        return {};
     }
 }

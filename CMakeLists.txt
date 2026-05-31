@@ -18,9 +18,14 @@ add_executable(${AppName}
     src/app/TemplateRunner.cpp
 
     src/app/CoreRunner.cpp
+    src/app/coreRunner/CoreDetectedPanel.cpp   
+    src/app/coreRunner/CoreInput.cpp
+    src/app/coreRunner/CoreInputPanel.cpp      
+    src/app/coreRunner/CoreSelectedPanel.cpp  
     src/app/coreRunner/CoreSelectionInput.cpp
     src/app/coreRunner/CoreSelectionUi.cpp
-    src/app/coreRunner/CoreTreeRender.cpp
+    src/app/coreRunner/CoreUtils.cpp              
+    src/app/coreRunner/TreeBuilder.cpp 
 
     src/cli/ArgParser.cpp
 
