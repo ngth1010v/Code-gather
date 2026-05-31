@@ -326,11 +326,14 @@ namespace cgt::app::coreRunner
 
             if (cancel)
             {
+                cgt::ui::teminal::Destroy();
                 return {};
             }
 
             if (finish)
             {
+                cgt::ui::teminal::Destroy();
+
                 const auto state = editor.Parse(files.size());
                 return state.selectedIds;
             }
@@ -360,5 +363,7 @@ namespace cgt::app::coreRunner
                 std::this_thread::sleep_for(frameMs - elapsed);
             }
         }
+
+
     }
 }

@@ -25,6 +25,7 @@ add_executable(${AppName}
     src/app/coreRunner/CoreSelectionInput.cpp
     src/app/coreRunner/CoreSelectionUi.cpp
     src/app/coreRunner/CoreUtils.cpp              
+    src/app/coreRunner/PrintCoreResult.cpp 
     src/app/coreRunner/TreeBuilder.cpp 
 
     src/cli/ArgParser.cpp

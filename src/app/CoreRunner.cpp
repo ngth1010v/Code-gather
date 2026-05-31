@@ -9,6 +9,7 @@
 #include "log/Logger.h"
 #include "scan/DiscoveryScanner.h"
 #include "util/PathUtil.h"
+#include "app/coreRunner/PrintCoreResult.h"
 
 #include <iostream>
 #include <stdexcept>
@@ -16,20 +17,7 @@
 
 namespace cgt::app
 {
-    namespace
-    {
-        void ClearMainBuffer()
-        {
-            std::wcout << L"\x1b[2J\x1b[H";
-            std::wcout.flush();
-        }
 
-        void PrintNoChangesAndClear()
-        {
-            ClearMainBuffer();
-            cgt::log::Logger::Plain(L"CoreGather: No changes were made.");
-        }
-    }
 
     int CoreRunner::Run(const cgt::cli::ParsedArgs& args, const fs::path& rootDir)
     {
@@ -46,31 +34,24 @@ namespace cgt::app
         SyncGlobalFilters(state.filters);
 
         const bool replace = args.HasFlag(L"replace") || args.HasFlag(L"r");
-        const bool wrapped = !(args.HasFlag(L"nowrapped") || args.HasFlag(L"nw"));
+        const bool wrapped = !(args.HasFlag(L"nowrap") || args.HasFlag(L"nowrapped") || args.HasFlag(L"nw"));
 
         scan::DiscoveryScanner scanner(rootDir);
         std::vector<scan::DiscoveredFile> discovered = scanner.Scan();
 
         if (args.sourceArgs.empty() && discovered.empty())
         {
-            PrintNoChangesAndClear();
-            return 0;
+            return cgt::app::coreRunner::printResult::PrintNothing();
         }
 
         cgt::app::coreRunner::CoreSelectionUi selectionUi;
         const std::vector<std::size_t> selectedIds = selectionUi.Run(discovered, rootDir);
         if (selectedIds.empty())
         {
-            PrintNoChangesAndClear();
-            return 0;
+            return cgt::app::coreRunner::printResult::PrintNothing();
         }
 
         const fs::path outputPath = ResolveTarget(rootDir, state.outputToken);
-        ClearMainBuffer();
-        cgt::log::Logger::Plain(L"Merging from " + std::to_wstring(selectedIds.size()) +
-                                L" files into file [" +
-                                cgt::util::RelativeDisplayPath(rootDir, outputPath) +
-                                L"]...");
 
         std::vector<io::GatheredBlock> blocks;
         bool hadAnyReadAttempt = false;
@@ -80,14 +61,12 @@ namespace cgt::app
         }
         catch (...)
         {
-            PrintNoChangesAndClear();
-            return 0;
+            return cgt::app::coreRunner::printResult::PrintNothing();
         }
 
         if (blocks.empty())
         {
-            PrintNoChangesAndClear();
-            return 0;
+            return cgt::app::coreRunner::printResult::PrintNothing();
         }
 
         io::TargetWriter writer;
@@ -96,13 +75,11 @@ namespace cgt::app
         {
             if (writer.Write(outputPath, wrapped, replace, blocks, errorMessage))
             {
-                ClearMainBuffer();
-                cgt::log::Logger::Plain(L"Successfully merged from " +
-                                        std::to_wstring(selectedIds.size()) +
-                                        L" files into file [" +
-                                        cgt::util::RelativeDisplayPath(rootDir, outputPath) +
-                                        L"].");
-                return 0;
+                return cgt::app::coreRunner::printResult::PrintSuccess(
+                    discovered,
+                    selectedIds,
+                    rootDir,
+                    outputPath);
             }
 
             cgt::log::Logger::Warning(L"TargetWriter", errorMessage);
