@@ -1,20 +1,19 @@
 # 📦 CodeGather
 
-Simple and fast CLI tool for collecting source files into one `.txt` output.
+Simple CLI tool for collecting source files into a single text file.
 
-Designed for:
+Useful for:
 - sharing code with AI
 - exporting project snippets
-- quick code packaging
-- readable aggregated output
+- creating compact project snapshots
 
 ---
 
 # 🚀 Install
 
-1. Download `CodeGather-Setup` from the GitHub Release page
+1. Download `CodeGather-Setup` from GitHub Releases
 2. Install
-3. Open terminal in your workspace
+3. Open a terminal inside your workspace
 4. Run:
 
 ```bash
@@ -23,120 +22,81 @@ cgt
 
 ---
 
-# ⚡ CLI
-
-## Core CLI
+# ⚡ Usage
 
 ```bash
-cgt <config> <flag> <template> <filter>
+cgt <config> <flag> <template> <rule>
 ```
 
-All components can appear in any order.
+Arguments may appear in any order.
 
----
-
-## Config
-
-### Output file
+Example:
 
 ```bash
---output=result.txt
-```
-
-### Custom file prefix
-
-```bash
---filePrefix=##
+cgt -cpp src/ include/ !**build/ !**.obj
 ```
 
 ---
 
-## Flags
+# ⚙️ Config / flags
 
-### Replace output instead of append
+Output file:
+
+```bash
+--output=cgt-result.md
+```
+
+Replace output instead of append:
 
 ```bash
 --replace
+--r
 ```
+
+No wrap the code + No header:
+
+```bash
+--nowrap
+--nw
+```
+
+CLI config always overrides template config.
 
 ---
 
-## Templates
+# 🧩 Templates
 
-### Apply template
+Apply a template:
 
 ```bash
 -cpp
 ```
 
-### Apply template with space in name
+Template names may contain spaces:
 
 ```bash
-" -my template "
+"-my template"
 ```
 
-Behavior:
-- only the first existing template is used
-- if multiple templates are provided:
-  - invalid templates are skipped
-  - first existing template is applied
-  - remaining templates are ignored with warning
+Rules:
+- only the first valid template is used
+- invalid templates are skipped
+- CLI rules are appended to template rules
+- duplicate rules are removed
 
-CLI config always overrides template config.
-
-CLI filters are appended to template filters without duplicates.
-
----
-
-## Filters
-
-### Extension filter
+Create or update:
 
 ```bash
-.cpp
-.h
+cgt setTemplate cpp src/ include/ .cpp .h
 ```
 
-### Directory filter
-
-```bash
-src
-include
-```
-
-### Direct file
-
-```bash
-src/main.cpp
-```
-
----
-
-# 🧩 Template Commands
-
-## Create / Update Template
-
-```bash
-cgt setTemplate <templateName> <config> <filter>
-```
-
-Example:
-
-```bash
-cgt setTemplate cpp .cpp .h include src
-```
-
----
-
-## Remove Template
-
-### Remove one template
+Remove:
 
 ```bash
 cgt rmTemplate cpp
 ```
 
-### Remove all templates
+Remove all:
 
 ```bash
 cgt rmTemplate --all
@@ -144,27 +104,20 @@ cgt rmTemplate --all
 
 ---
 
-# 🖥️ Console Output
+# 🖥️ File Selection
 
-## Example
+Example:
 
 ```text
 Found files:
-  Code-gather/
+  Project/
   ├── include/
 1 │   └── main.h
   └── src/
 2     └── main.cpp
 ```
 
-Properties:
-- numbered entries are selectable
-- each extension has its own color
-- colors are configurable in `.cgtconfig`
-
----
-
-# 📌 File Selection
+Select files:
 
 ```text
 1 2
@@ -178,276 +131,198 @@ or
 
 ---
 
-# 📄 Result Output
+# 📄 Output Format
 
-Generated output format with:
+Example (with wrapped):
 
-```bash
---filePrefix=**
+````md
+# CODE
+### main.cpp
+```cpp
+<code main.cpp>
 ```
-
-Result:
-
-```text
-*CODE:
-
-**START test1.cpp
-<...code...>
-**END test1.cpp
-
-**START test2.cpp
-<...code...>
-**END test2.cpp
+### app.h
+```h
+<code app.h>
 ```
+````
 
 Properties:
-- plain text output
-- deterministic format
-- easy to parse later
+- deterministic
+- easy to parse
 - preserves original formatting
+
+---
+
+# 🔍 Rule Syntax (ignore/filter)
+
+
+Filters and ignore rules use the same syntax.
+
+Paths are matched component-by-component.
+
+Example:
+
+```text
+include/core/test.h
+-> ["include/", "core/", "test.h"]
+```
+
+Directory components end with `/`.
+
+---
+
+## Logic
+
+NOT:
+
+```text
+!condition
+```
+
+AND:
+
+```text
+condition1,condition2
+```
+
+OR:
+
+```text
+condition1 condition2
+```
+
+---
+
+## Conditions
+
+Exact match:
+
+```text
+name
+name/
+```
+
+Ends with:
+
+```text
+*name
+**name
+```
+
+Starts with:
+
+```text
+name*
+name**
+```
+
+Contains:
+
+```text
+*name*
+**name**
+**name*
+*name**
+```
+
+Scope:
+
+| Syntax | Scope |
+|----------|----------|
+| `*` | current level |
+| `**` | current level + deeper levels |
+
+Names containing spaces may be quoted:
+
+```text
+"My Folder"/
+```
+
+---
+
+## Examples
+
+Recursive C++ files:
+
+```text
+**.cpp
+```
+
+Headers directly inside include:
+
+```text
+include/,*.h
+```
+
+Directories ending with build under include:
+
+```text
+include/**build/
+```
+
+Exclude test files:
+
+```text
+!**test.cpp
+```
+
+Typical source filter:
+
+```text
+src/ include/ .cpp .h
+```
+
+## 📌 Default Ignore Rules
+
+```text
+.vscode/
+.git/
+```
+
+## 📌 Shortened filter syntax
+
+```text
+./file.cpp  -> file.cpp
+/file.cpp   -> file.cpp
+file.cpp    -> **file.cpp
+
+./dir/      -> dir/
+/dir/       -> dir/
+dir/        -> **dir/
+```
 
 ---
 
 # ⚙️ .cgtconfig
 
-CodeGather automatically creates `.cgtconfig` inside the workspace directory.
+CodeGather automatically creates `.cgtconfig` in the workspace directory.
 
-Used for:
-- ignore rules
-- extension colors
-- output path
-- file prefix
-- templates
-
----
-
-# 🧱 Config Format
-
-## Example
+Example:
 
 ```ini
 [GENERAL]
-output=E:/CODE/Code-gather/cgt-result.txt
+output=cgt-result.txt
 filePrefix=**
 
 [IGNORE]
 .vscode/
 .git/
-*.obj
+**.obj
 **build/
-include/*.gen.h
-src/**temp/
 
 [COLOR]
-bat=180,180,180
-bin=182,201,164
-c=200,220,255
 cpp=120,210,255
 h=255,220,120
-md=180,255,180
-txt=220,220,220
-py=255,230,120
-js=255,220,100
-jsx=120,220,255
-tsx=120,255,220
-gitignore=180,180,180
-cgtconfig=255,180,255
 
 [TEMPLATE:cpp]
 output=cpp-result.txt
 filePrefix=**
-ext=.cpp
-ext=.h
-dir=src
-dir=include
+src/
+include/
+.cpp
+.h
 ```
 
 ---
 
-# 🚫 Ignore Rules
-
-Ignore rules are component-based path matchers.
-
-Rules are split using `/` and matched component-by-component.
-
-Example:
-
-```text
-include/data/file.txt
--> ["include/", "data/", "file.txt"]
-```
-
-Rule example:
-
-```text
-include/*.txt
--> ["include/", "*.txt"]
-```
-
----
-
-# 🧩 Ignore Rule Syntax
-
-## Exact Component Match
-
-Matches an exact component.
-
-```text
-include/data/
-```
-
-Matches:
-
-```text
-include/data/
-```
-
-Does not match:
-
-```text
-src/include/data/
-```
-
----
-
-## `*name`
-
-Matches a component in the current level if the component ends with `name`.
-
-```text
-*.txt
-```
-
-Matches:
-
-```text
-hello.txt
-test.txt
-```
-
-Does not match:
-
-```text
-dir/hello.txt
-```
-
----
-
-## `**name`
-
-Matches any component recursively if the component ends with `name`.
-
-```text
-**.txt
-```
-
-Matches:
-
-```text
-a.txt
-dir/a.txt
-src/test/a.txt
-```
-
----
-
-# 📁 Directory Rules
-
-Directory rules should end with `/`.
-
-## Ignore exact directory level
-
-```text
-build/
-```
-
-Matches:
-
-```text
-build/
-```
-
-Does not match:
-
-```text
-src/build/
-```
-
----
-
-## Ignore directory recursively
-
-```text
-**build/
-```
-
-Matches:
-
-```text
-build/
-src/build/
-a/b/c/build/
-```
-
----
-
-# 🧪 Ignore Rule Examples
-
-## Ignore root `.git`
-
-```text
-.git/
-```
-
----
-
-## Ignore all `.obj` files recursively
-
-```text
-**.obj
-```
-
----
-
-## Ignore generated headers inside `include/`
-
-```text
-include/*.gen.h
-```
-
-Matches:
-
-```text
-include/test.gen.h
-```
-
-Does not match:
-
-```text
-include/core/test.gen.h
-```
-
----
-
-## Ignore every `temp/` directory recursively
-
-```text
-**temp/
-```
-
-Matches:
-
-```text
-temp/
-src/temp/
-a/b/temp/
-```
-
----
-
-# 📌 Default Ignore Rules
-
-```text
-.vscode/
-.git/
-```
