@@ -29,6 +29,9 @@ namespace cgt::app
 
     std::wstring NormalizeCliFilterRule(std::wstring rule)
     {
+        //DEBUG
+        // return rule;
+
         rule = Trimmed(std::move(rule));
         if (rule.empty())
         {
@@ -47,7 +50,7 @@ namespace cgt::app
             return Trimmed(std::move(rule));
         }
 
-        if (rule.rfind(L"**", 0) == 0 || rule.rfind(L"*", 0) == 0)
+        if (rule[0] == L'*' || rule[rule.size()-1] == L'*')
         {
             return rule;
         }
@@ -151,11 +154,11 @@ namespace cgt::app
 
     void SyncGlobalFilters(const std::vector<std::wstring>& filters)
     {
-        const auto existingFilters = cgt::filter::GetFilters();
-        for (const auto& rule : existingFilters)
-        {
-            cgt::filter::RemoveFilter(rule);
-        }
+        // const auto existingFilters = cgt::filter::GetFilters();
+        // for (const auto& rule : existingFilters)
+        // {
+        //     cgt::filter::RemoveFilter(rule);
+        // }
 
         for (const auto& rule : filters)
         {

@@ -1,112 +1,156 @@
 #include "filter/FilterMatcher.h"
 
+#include <algorithm>
+
 #include "filter/FilterUtils.h"
-#include "log/Logger.h"
-
-
 
 namespace cgt::filter::detail
 {
-    bool MatchRule(const std::vector<std::wstring>& srcComponents,
-                   const std::vector<std::wstring>& ruleComponents,
-                   const bool ignore)
+    namespace
     {
-        if (ruleComponents.empty()) return false;
-        if (srcComponents.empty()) return false;
-
-        size_t sci = 0;
-        size_t rci = 0;
-
-        std::wstring lastSrcComponent = srcComponents[srcComponents.size()-1];
-        bool isDir = lastSrcComponent[lastSrcComponent.size()-1] == '/';
-
-        bool unmatch2 = false;
-        bool unmatch1 = false;
-        bool unmatch = false;
-
-        while (sci < srcComponents.size() && rci < ruleComponents.size())
+        enum class MatchKind
         {
-            const std::wstring& rule = ruleComponents[rci];
+            Exact,
+            EndsWith,
+            StartsWith,
+            Contains,
+        };
 
-            // **xxx -> match any component that ends with xxx
-            if (rule.size() >= 2 && rule[0] == L'*' && rule[1] == L'*')
+        std::wstring ComponentText(std::wstring s)
+        {
+            s = StripTrailingSlash(std::move(s));
+            return s;
+        }
+
+        MatchKind GetMatchKind(const Component& c)
+        {
+            const bool recursive = c.prefixCount >= 2 || c.suffixCount >= 2;
+
+            if (!recursive)
             {
+                if (c.prefixCount == 0 && c.suffixCount == 0) return MatchKind::Exact;
+                if (c.prefixCount > 0 && c.suffixCount == 0) return MatchKind::EndsWith;
+                if (c.prefixCount == 0 && c.suffixCount > 0) return MatchKind::StartsWith;
+                return MatchKind::Contains;
+            }
 
-                std::wstring ruleName = rule.substr(2);
+            if (c.prefixCount >= 2 && c.suffixCount == 0) return MatchKind::EndsWith;
+            if (c.prefixCount == 0 && c.suffixCount >= 2) return MatchKind::StartsWith;
+            return MatchKind::Contains;
+        }
 
-                while (sci < srcComponents.size() && !EndWith(srcComponents[sci], ruleName))
+        bool MatchOneComponent(const std::wstring& src, const Component& rule)
+        {
+            const auto srcText = ComponentText(src);
+            const auto ruleText = ComponentText(rule.name);
+
+            switch (GetMatchKind(rule))
+            {
+            case MatchKind::Exact:
+                return srcText == ruleText;
+            case MatchKind::EndsWith:
+                return EndWith(srcText, ruleText);
+            case MatchKind::StartsWith:
+                return StartWith(srcText, ruleText);
+            case MatchKind::Contains:
+                return Contains(srcText, ruleText);
+            }
+
+            return false;
+        }
+
+        bool IsRecursive(const Component& c)
+        {
+            return c.prefixCount >= 2 || c.suffixCount >= 2;
+        }
+
+        bool MatchSequence(const std::vector<std::wstring>& src,
+                           size_t si,
+                           const Condition& condition,
+                           size_t ci,
+                           bool isDir)
+        {
+
+            if (ci >= condition.components.size())
+            {
+                return true;
+            }
+
+            if (si >= src.size())
+            {
+                return isDir;
+            }
+
+            const auto& comp = condition.components[ci];
+
+            if (IsRecursive(comp))
+            {
+                for (size_t i = si; i < src.size(); ++i)
                 {
-                    ++sci;
-                }
+                    // if (!MatchOneComponent(src[i], comp))
+                    if (MatchOneComponent(src[i], comp) == comp.negation)
+                    {
+                        continue;
+                    }
 
-                if (sci >= srcComponents.size())
-                {
-
-                    if (!ignore && isDir)
+                    if (MatchSequence(src, i + 1, condition, ci + 1, isDir))
                     {
                         return true;
                     }
-
-                    unmatch2 = true;
-                    break;
                 }
 
-                ++sci;
-                ++rci;
-                continue;
+                return isDir;
             }
 
-            // *xxx -> match current component that ends with xxx
-            if (!rule.empty() && rule[0] == L'*')
+            // if (!MatchOneComponent(src[si], comp))
+            if (MatchOneComponent(src[si], comp) == comp.negation)
             {
-                std::wstring ruleName = rule.substr(1);
-
-                if (!EndWith(srcComponents[sci], ruleName))
-                {
-                    unmatch1 = true;
-                    break;
-                }
-
-                ++sci;
-                ++rci;
-                continue;
+                return false;
             }
 
-            // exact match
-            if (srcComponents[sci] != rule)
-            {
-                unmatch = true;
-                break;
-            }
-
-            ++sci;
-            ++rci;
+            return MatchSequence(src, si + 1, condition, ci + 1, isDir);
         }
 
-
-
-        // DEBUG
-        // log::Logger::Warning(L"FilterMatcher", L"");
-        // log::Logger::Warning(L"FilterMatcher", isDir ? L"dir" : L"file");
-        // std::wstring srcLog = L"Src: [";
-        // std::wstring ruleLog = L"Rule: [";
-        // for (auto c : srcComponents) srcLog = srcLog + c + L",";
-        // for (auto c : ruleComponents) ruleLog = ruleLog + c + L",";
-        // srcLog += L"]";
-        // ruleLog += L"]";
-        // log::Logger::Warning(L"FilterMatcher", srcLog);
-        // log::Logger::Warning(L"FilterMatcher", ruleLog);
-
-        // if (unmatch2) log::Logger::Warning(L"FilterMatcher", L"Unmatch 2");
-        // else if (unmatch1) log::Logger::Warning(L"FilterMatcher", L"Unmatch 1");
-        // else if (unmatch) log::Logger::Warning(L"FilterMatcher", L"Unmatch");
-        // else log::Logger::Warning(L"FilterMatcher", L"Match");
-        // DEBUG
-
-        if (!ignore && isDir && sci == srcComponents.size() && !unmatch2 && !unmatch1 && !unmatch)
+        bool MatchCondition(const std::vector<std::wstring>& srcComponents,
+                            const Condition& condition)
         {
-            return true;
+            if (condition.components.empty())
+            {
+                return false;
+            }
+
+            const bool isDir = !srcComponents.empty() && !srcComponents.back().empty() && srcComponents.back().back() == L'/';
+            return MatchSequence(srcComponents, 0, condition, 0, isDir);
         }
-        return rci == ruleComponents.size();
+    }
+
+    bool MatchRule(const std::vector<std::wstring>& srcComponents,
+                   const RuleEntry& rule)
+    {
+        if (rule.clauses.empty())
+        {
+            return false;
+        }
+
+        for (const auto& andGroup : rule.clauses)
+        {
+            bool clausePass = true;
+            for (const auto& condition : andGroup)
+            {
+                const bool matched = MatchCondition(srcComponents, condition);
+                if (!matched)
+                {
+                    clausePass = false;
+                    break;
+                }
+            }
+
+            if (clausePass)
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

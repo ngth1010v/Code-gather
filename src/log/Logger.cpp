@@ -17,7 +17,7 @@ namespace cgt::log
         std::mutex gMutex;
         bool gInitialized = false;
         fs::path gLogFile;
-        std::atomic<bool> gLogEnable{false}; // Disabled by default, change to true if you want it on by default
+        std::atomic<bool> gLogEnable{true}; // Disabled by default, change to true if you want it on by default
 
         fs::path GetExeDirectory()
         {

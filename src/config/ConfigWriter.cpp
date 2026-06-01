@@ -41,7 +41,7 @@ namespace cgt::config
         fout << "output=" << detail::ToNarrow(detail::PathToWide(state.outputFilePath)) << "\n";
 
         fout << "[IGNORE]\n";
-        for (const auto& rule : cgt::filter::GetIgnores())
+        for (const auto& rule : state.ignoreRules)
         {
             fout << detail::ToNarrow(rule) << "\n";
         }

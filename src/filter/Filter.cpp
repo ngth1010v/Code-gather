@@ -5,6 +5,7 @@
 
 #include "filter/FilterMatcher.h"
 #include "filter/FilterUtils.h"
+
 #include "log/Logger.h"
 
 namespace cgt::filter
@@ -13,8 +14,8 @@ namespace cgt::filter
     {
         struct FilterState
         {
-            std::map<std::wstring, std::vector<std::wstring>> filters;
-            std::map<std::wstring, std::vector<std::wstring>> ignores;
+            std::map<std::wstring, detail::RuleEntry> ignores;
+            std::map<std::wstring, detail::RuleEntry> filters;
         };
 
         FilterState& State()
@@ -23,28 +24,32 @@ namespace cgt::filter
             return state;
         }
 
-        bool AddRule(std::map<std::wstring, std::vector<std::wstring>>& rules, std::wstring rule)
+        bool AddRule(std::map<std::wstring, detail::RuleEntry>& rules, std::wstring rule)
         {
-            rule = detail::NormalizeRule(std::move(rule));
-            if (rule.empty())
+            detail::RuleEntry entry;
+            if (!detail::ParseRule(std::move(rule), entry))
             {
                 return false;
             }
 
-            rules[rule] = detail::ComponentSpliter(rule);
+            detail::PrintRuleEntry(entry);
 
+            const auto key = detail::SerializeRule(entry);
+            entry.original = key;
+            rules[key] = std::move(entry);
             return true;
         }
 
-        bool RemoveRule(std::map<std::wstring, std::vector<std::wstring>>& rules, std::wstring rule)
+        bool RemoveRule(std::map<std::wstring, detail::RuleEntry>& rules, std::wstring rule)
         {
-            rule = detail::NormalizeRule(std::move(rule));
-            if (rule.empty())
+            detail::RuleEntry entry;
+            if (!detail::ParseRule(std::move(rule), entry))
             {
                 return false;
             }
 
-            auto it = rules.find(rule);
+            const auto key = detail::SerializeRule(entry);
+            auto it = rules.find(key);
             if (it == rules.end())
             {
                 return false;
@@ -54,7 +59,7 @@ namespace cgt::filter
             return true;
         }
 
-        std::vector<std::wstring> GetRuleKeys(const std::map<std::wstring, std::vector<std::wstring>>& rules)
+        std::vector<std::wstring> GetRuleKeys(const std::map<std::wstring, detail::RuleEntry>& rules)
         {
             std::vector<std::wstring> out;
             out.reserve(rules.size());
@@ -66,21 +71,6 @@ namespace cgt::filter
 
             return out;
         }
-    }
-
-    bool AddFilter(std::wstring rule)
-    {
-        return AddRule(State().filters, std::move(rule));
-    }
-
-    bool RemoveFilter(std::wstring rule)
-    {
-        return RemoveRule(State().filters, std::move(rule));
-    }
-
-    std::vector<std::wstring> GetFilters()
-    {
-        return GetRuleKeys(State().filters);
     }
 
     bool AddIgnore(std::wstring rule)
@@ -98,6 +88,21 @@ namespace cgt::filter
         return GetRuleKeys(State().ignores);
     }
 
+    bool AddFilter(std::wstring rule)
+    {
+        return AddRule(State().filters, std::move(rule));
+    }
+
+    bool RemoveFilter(std::wstring rule)
+    {
+        return RemoveRule(State().filters, std::move(rule));
+    }
+
+    std::vector<std::wstring> GetFilters()
+    {
+        return GetRuleKeys(State().filters);
+    }
+
     bool HasPass(std::wstring path)
     {
         auto& state = State();
@@ -109,38 +114,35 @@ namespace cgt::filter
         }
 
         const auto srcComponents = detail::ComponentSpliter(path);
-
-        for (const auto& [_, ruleComponents] : state.ignores)
+        if (srcComponents.empty())
         {
-            if (detail::MatchRule(srcComponents, ruleComponents, true))
+            return false;
+        }
+
+        // Ignore first
+        for (const auto& [_, rule] : state.ignores)
+        {
+            if (detail::MatchRule(srcComponents, rule))
             {
                 return false;
             }
-        }        
+        }
 
-        if (!state.filters.empty())
+        // No filter => everything passes (except ignored)
+        if (state.filters.empty())
         {
-            bool passedAnyFilter = false;
-            for (const auto& [_, ruleComponents] : state.filters)
+            return true;
+        }
+
+        // Must match at least one filter
+        for (const auto& [_, rule] : state.filters)
+        {
+            if (detail::MatchRule(srcComponents, rule))
             {
-                // Truyền ignore = false
-                if (detail::MatchRule(srcComponents, ruleComponents, false))
-                {
-                    passedAnyFilter = true;
-                    break;
-                }
+                return true;
             }
-            
-            // Nếu không match bất kỳ filter nào -> loại
-            if (!passedAnyFilter)
-            {
-                return false;
-            }
-        }       
+        }
 
-
-
-
-        return true;
+        return false;
     }
 }

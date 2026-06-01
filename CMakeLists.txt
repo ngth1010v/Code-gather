@@ -39,6 +39,7 @@ add_executable(${AppName}
 
     src/filter/Filter.cpp
     src/filter/FilterMatcher.cpp
+    src/filter/FilterParser.cpp
     src/filter/FilterUtils.cpp
 
     src/io/FileReader.cpp

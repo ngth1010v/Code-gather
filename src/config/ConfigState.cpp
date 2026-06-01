@@ -34,10 +34,7 @@ namespace cgt::config::detail
             cgt::filter::RemoveIgnore(rule);
         }
 
-        for (const auto& rule : kDefaultIgnoreRules)
-        {
-            cgt::filter::AddIgnore(rule);
-        }
+        s.ignoreRules = kDefaultIgnoreRules; // store ignore rules here
 
         s.extColors = kDefaultExtColors;
         s.templates.clear();

@@ -20,6 +20,7 @@ namespace cgt::config::detail
         fs::path outputFilePath;
         std::map<std::wstring, RGB> extColors;
         std::map<std::wstring, CgtTemplate> templates;
+        std::vector<std::wstring> ignoreRules;
     };
 
     ConfigState& State();

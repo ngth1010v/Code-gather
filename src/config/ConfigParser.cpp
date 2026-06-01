@@ -27,6 +27,8 @@ namespace cgt::config
             return kStatusOk;
         }
 
+        state.ignoreRules.clear();
+
         detail::Section section = detail::Section::None;
         std::wstring currentTemplateName;
         std::string raw;
@@ -92,7 +94,7 @@ namespace cgt::config
             }
             else if (section == detail::Section::Ignore)
             {
-                cgt::filter::AddIgnore(line);
+                state.ignoreRules.push_back(line);
             }
             else if (section == detail::Section::Color)
             {
@@ -113,6 +115,11 @@ namespace cgt::config
             {
                 detail::LogWarn(L"Line outside section ignored: " + line);
             }
+        }
+
+        for (const auto& rule : state.ignoreRules)
+        {
+            cgt::filter::AddIgnore(rule);
         }
 
         state.parsed = true;
