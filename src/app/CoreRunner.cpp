@@ -14,6 +14,7 @@
 #include <iostream>
 #include <stdexcept>
 #include <vector>
+#include <iostream>
 
 namespace cgt::app
 {
@@ -39,9 +40,9 @@ namespace cgt::app
         scan::DiscoveryScanner scanner(rootDir);
         std::vector<scan::DiscoveredFile> discovered = scanner.Scan();
 
-        if (args.sourceArgs.empty() && discovered.empty())
+        if (discovered.empty())
         {
-            return cgt::app::coreRunner::printResult::PrintNothing();
+            return cgt::app::coreRunner::printResult::PrintDetectedNothing();
         }
 
         cgt::app::coreRunner::CoreSelectionUi selectionUi;

@@ -16,4 +16,5 @@ namespace cgt::app::coreRunner::printResult
                      const fs::path& outputPath);
 
     int PrintNothing();
+    int PrintDetectedNothing();
 }

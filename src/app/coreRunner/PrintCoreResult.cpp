@@ -29,6 +29,7 @@ namespace cgt::app::coreRunner::printResult
         const std::vector<std::wstring> lines =
             BuildTreeLines(tree);
 
+        std::wcout << L"---\n";
         for (const auto& line : lines)
         {
             std::wcout << line << L'\n';
@@ -54,6 +55,18 @@ namespace cgt::app::coreRunner::printResult
 
         std::wcout
             << L"CodeGather: No files were merged.\n\n";
+
+        std::wcout.flush();
+
+        return 0;
+    }
+
+    int PrintDetectedNothing()
+    {
+        ClearMainBuffer();
+
+        std::wcout
+            << L"CodeGather: No files match the ignore and filter settings.\n\n";
 
         std::wcout.flush();
 
